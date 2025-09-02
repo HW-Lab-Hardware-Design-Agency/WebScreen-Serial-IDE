@@ -6,9 +6,9 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #1a1a1a;
-    color: #e4e4e4;
+    font-family: 'Segoe UI', 'Consolas', 'Monaco', 'Courier New', monospace;
+    background: #1e1e1e;
+    color: #cccccc;
     height: 100vh;
     overflow: hidden;
 }
@@ -21,8 +21,8 @@ body {
 
 /* Header */
 .header {
-    background: #2d2d2d;
-    border-bottom: 1px solid #404040;
+    background: #2d2d30;
+    border-bottom: 1px solid #3e3e42;
     padding: 12px 20px;
     min-height: 60px;
 }
@@ -34,9 +34,13 @@ body {
 }
 
 .header h1 {
-    color: #00d4aa;
+    color: #4fc3f7;
     font-size: 24px;
     font-weight: 600;
+    background: linear-gradient(45deg, #4fc3f7, #29b6f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .connection-status {
@@ -48,24 +52,29 @@ body {
 /* Status Badges */
 .status-badge {
     padding: 4px 12px;
-    border-radius: 16px;
+    border-radius: 12px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .status-badge.connected {
-    background: #22c55e;
+    background: linear-gradient(135deg, #4caf50, #66bb6a);
     color: white;
+    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
 }
 
 .status-badge.disconnected {
-    background: #ef4444;
+    background: linear-gradient(135deg, #f44336, #ef5350);
     color: white;
+    box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
 }
 
 .status-badge.connecting {
-    background: #f59e0b;
+    background: linear-gradient(135deg, #ff9800, #ffb74d);
     color: white;
+    box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
 }
 
 /* Buttons */
@@ -80,62 +89,73 @@ body {
     align-items: center;
     gap: 6px;
     transition: all 0.2s ease;
-    background: #404040;
-    color: #e4e4e4;
+    background: #3c3c3c;
+    color: #cccccc;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .btn:hover {
     background: #4a4a4a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
 }
 
 .btn.btn-primary {
-    background: #00d4aa;
-    color: #1a1a1a;
+    background: linear-gradient(135deg, #2196f3, #42a5f5);
+    color: white;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
 }
 
 .btn.btn-primary:hover {
-    background: #00b896;
+    background: linear-gradient(135deg, #1976d2, #2196f3);
+    box-shadow: 0 3px 8px rgba(33, 150, 243, 0.4);
 }
 
 .btn.btn-success {
-    background: #22c55e;
+    background: linear-gradient(135deg, #4caf50, #66bb6a);
     color: white;
+    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
 }
 
 .btn.btn-success:hover {
-    background: #16a34a;
+    background: linear-gradient(135deg, #388e3c, #4caf50);
+    box-shadow: 0 3px 8px rgba(76, 175, 80, 0.4);
 }
 
 .btn.btn-danger {
-    background: #ef4444;
+    background: linear-gradient(135deg, #f44336, #ef5350);
     color: white;
+    box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
 }
 
 .btn.btn-danger:hover {
-    background: #dc2626;
+    background: linear-gradient(135deg, #d32f2f, #f44336);
+    box-shadow: 0 3px 8px rgba(244, 67, 54, 0.4);
 }
 
 .btn.btn-sm {
-    padding: 4px 8px;
+    padding: 6px 12px;
     font-size: 12px;
 }
 
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 /* Main Content */
 .main-content {
     flex: 1;
     display: flex;
-    gap: 1px;
+    gap: 0;
     overflow: hidden;
 }
 
 /* Panel Styles */
 .editor-panel, .terminal-panel {
-    background: #262626;
+    background: #252526;
     display: flex;
     flex-direction: column;
 }
@@ -143,16 +163,17 @@ body {
 .editor-panel {
     flex: 1;
     min-width: 400px;
+    border-right: 1px solid #3e3e42;
 }
 
 .terminal-panel {
     width: 400px;
-    border-left: 1px solid #404040;
+    background: #1e1e1e;
 }
 
 .panel-header {
-    background: #2d2d2d;
-    border-bottom: 1px solid #404040;
+    background: #2d2d30;
+    border-bottom: 1px solid #3e3e42;
     padding: 12px 16px;
     display: flex;
     justify-content: space-between;
@@ -163,7 +184,7 @@ body {
 .panel-header h3 {
     font-size: 16px;
     font-weight: 600;
-    color: #e4e4e4;
+    color: #cccccc;
 }
 
 /* Tabs */
@@ -176,19 +197,22 @@ body {
     padding: 8px 16px;
     background: transparent;
     border: none;
-    color: #a0a0a0;
+    color: #969696;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.2s ease;
+    font-weight: 500;
 }
 
 .tab:hover {
-    color: #e4e4e4;
+    color: #cccccc;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .tab.active {
-    color: #00d4aa;
-    border-bottom-color: #00d4aa;
+    color: #4fc3f7;
+    border-bottom-color: #4fc3f7;
+    background: rgba(79, 195, 247, 0.1);
 }
 
 /* Tab Content */
@@ -209,18 +233,20 @@ body {
 }
 
 .filename-input {
-    background: #404040;
-    border: 1px solid #555;
-    color: #e4e4e4;
+    background: #3c3c3c;
+    border: 1px solid #5a5a5a;
+    color: #cccccc;
     padding: 6px 12px;
     border-radius: 4px;
     width: 150px;
     font-size: 14px;
+    transition: all 0.2s ease;
 }
 
 .filename-input:focus {
     outline: none;
-    border-color: #00d4aa;
+    border-color: #4fc3f7;
+    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
 }
 
 /* Code Editor */
@@ -229,28 +255,33 @@ body {
 }
 
 .CodeMirror {
-    font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace !important;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace !important;
     font-size: 14px !important;
     height: 100% !important;
-    background: #262626 !important;
-    color: #e4e4e4 !important;
+    background: #1e1e1e !important;
+    color: #d4d4d4 !important;
 }
 
 .CodeMirror-gutters {
-    background: #2d2d2d !important;
-    border-right: 1px solid #404040 !important;
+    background: #252526 !important;
+    border-right: 1px solid #3e3e42 !important;
 }
 
 .CodeMirror-linenumber {
-    color: #666 !important;
+    color: #858585 !important;
+    padding: 0 8px !important;
 }
 
 .CodeMirror-cursor {
-    border-left: 2px solid #00d4aa !important;
+    border-left: 2px solid #4fc3f7 !important;
 }
 
 .CodeMirror-selected {
-    background: rgba(0, 212, 170, 0.2) !important;
+    background: rgba(79, 195, 247, 0.15) !important;
+}
+
+.CodeMirror-activeline-background {
+    background: rgba(255, 255, 255, 0.05) !important;
 }
 
 /* File Manager */
@@ -262,8 +293,8 @@ body {
 
 .file-actions {
     padding: 12px;
-    background: #2d2d2d;
-    border-bottom: 1px solid #404040;
+    background: #2d2d30;
+    border-bottom: 1px solid #3e3e42;
     display: flex;
     gap: 8px;
 }
@@ -272,12 +303,13 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 12px;
+    background: #252526;
 }
 
 .file-item {
     display: flex;
     align-items: center;
-    padding: 8px;
+    padding: 8px 12px;
     cursor: pointer;
     border-radius: 4px;
     transition: background 0.2s ease;
@@ -285,12 +317,12 @@ body {
 }
 
 .file-item:hover {
-    background: #333;
+    background: #2a2d2e;
 }
 
 .file-item.selected {
-    background: #00d4aa20;
-    color: #00d4aa;
+    background: rgba(79, 195, 247, 0.2);
+    color: #4fc3f7;
 }
 
 .file-icon {
@@ -299,7 +331,7 @@ body {
 }
 
 .placeholder {
-    color: #666;
+    color: #858585;
     text-align: center;
     padding: 40px 20px;
 }
@@ -314,12 +346,12 @@ body {
 
 .terminal-output {
     flex: 1;
-    background: #1a1a1a;
+    background: #0c0c0c;
     padding: 12px;
     overflow-y: auto;
-    font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+    font-family: 'Cascadia Code', 'Consolas', 'Monaco', monospace;
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-all;
 }
@@ -327,15 +359,15 @@ body {
 .terminal-input-container {
     display: flex;
     align-items: center;
-    background: #2d2d2d;
-    border-top: 1px solid #404040;
+    background: #1e1e1e;
+    border-top: 1px solid #3e3e42;
     padding: 8px 12px;
     gap: 8px;
 }
 
 .prompt {
-    color: #00d4aa;
-    font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+    color: #4fc3f7;
+    font-family: 'Cascadia Code', 'Consolas', 'Monaco', monospace;
     font-weight: bold;
 }
 
@@ -343,56 +375,82 @@ body {
     flex: 1;
     background: transparent;
     border: none;
-    color: #e4e4e4;
-    font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+    color: #cccccc;
+    font-family: 'Cascadia Code', 'Consolas', 'Monaco', monospace;
     font-size: 14px;
     outline: none;
 }
 
 .terminal-input::placeholder {
-    color: #666;
+    color: #858585;
 }
 
 /* Terminal Output Styling */
-.log-info { color: #00d4aa; }
-.log-error { color: #ef4444; }
-.log-warning { color: #f59e0b; }
-.log-success { color: #22c55e; }
-.log-command { color: #8b5cf6; }
-.log-response { color: #e4e4e4; }
+.log-info { 
+    color: #4fc3f7; 
+}
+
+.log-error { 
+    color: #f48771;
+    font-weight: 500;
+}
+
+.log-warning { 
+    color: #dcdcaa;
+}
+
+.log-success { 
+    color: #4ec9b0;
+    font-weight: 500;
+}
+
+.log-command { 
+    color: #c586c0;
+    font-weight: 600;
+}
+
+.log-response { 
+    color: #d4d4d4; 
+}
 
 /* Quick Commands */
 .quick-commands {
-    background: #2d2d2d;
-    border-top: 1px solid #404040;
+    background: #2d2d30;
+    border-top: 1px solid #3e3e42;
     padding: 12px;
 }
 
 .quick-commands h4 {
     font-size: 14px;
-    color: #a0a0a0;
+    color: #858585;
     margin-bottom: 8px;
+    font-weight: 600;
 }
 
 .command-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-    gap: 4px;
+    gap: 6px;
 }
 
 .cmd-btn {
-    padding: 4px 8px;
-    background: #404040;
-    border: none;
-    color: #e4e4e4;
+    padding: 6px 8px;
+    background: linear-gradient(135deg, #37373d, #3c3c3c);
+    border: 1px solid #5a5a5a;
+    color: #cccccc;
     font-size: 11px;
     border-radius: 4px;
     cursor: pointer;
-    transition: background 0.2s ease;
+    transition: all 0.2s ease;
+    font-weight: 500;
 }
 
 .cmd-btn:hover {
-    background: #4a4a4a;
+    background: linear-gradient(135deg, #404046, #4a4a4a);
+    border-color: #4fc3f7;
+    color: #4fc3f7;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* Terminal Actions */
@@ -403,15 +461,15 @@ body {
 
 /* Status Bar */
 .status-bar {
-    background: #2d2d2d;
-    border-top: 1px solid #404040;
+    background: #007acc;
+    color: white;
     padding: 6px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-size: 12px;
-    color: #a0a0a0;
     min-height: 32px;
+    font-weight: 500;
 }
 
 .status-left, .status-right {
@@ -421,26 +479,26 @@ body {
 }
 
 .separator {
-    color: #555;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #2d2d2d;
+    background: #1e1e1e;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #555;
-    border-radius: 4px;
+    background: #424242;
+    border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #666;
+    background: #4fc3f7;
 }
 
 /* Responsive Design */
@@ -452,8 +510,8 @@ body {
     .terminal-panel {
         width: 100%;
         height: 300px;
-        border-left: none;
-        border-top: 1px solid #404040;
+        border-right: none;
+        border-top: 1px solid #3e3e42;
     }
     
     .header-content {
@@ -469,8 +527,8 @@ body {
 
 /* Animation */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-in {
@@ -486,8 +544,8 @@ body {
 .spinner {
     width: 16px;
     height: 16px;
-    border: 2px solid #404040;
-    border-top: 2px solid #00d4aa;
+    border: 2px solid #3c3c3c;
+    border-top: 2px solid #4fc3f7;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -495,4 +553,47 @@ body {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* VSCode-style hover effects */
+.btn:hover svg {
+    filter: brightness(1.2);
+}
+
+.file-item:hover .file-icon {
+    opacity: 0.8;
+}
+
+/* Arduino IDE inspired syntax highlighting overrides */
+.cm-keyword { color: #569cd6 !important; }
+.cm-def { color: #dcdcaa !important; }
+.cm-variable { color: #9cdcfe !important; }
+.cm-variable-2 { color: #4fc3f7 !important; }
+.cm-string { color: #ce9178 !important; }
+.cm-comment { color: #6a9955 !important; }
+.cm-number { color: #b5cea8 !important; }
+.cm-operator { color: #d4d4d4 !important; }
+.cm-bracket { color: #ffd700 !important; }
+
+/* Focus indicators */
+.btn:focus {
+    outline: 2px solid #4fc3f7;
+    outline-offset: 2px;
+}
+
+.terminal-input:focus {
+    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.3);
+}
+
+/* Success/Error states for terminal */
+.terminal-success {
+    border-left: 3px solid #4ec9b0;
+    padding-left: 8px;
+    background: rgba(78, 201, 176, 0.1);
+}
+
+.terminal-error {
+    border-left: 3px solid #f48771;
+    padding-left: 8px;
+    background: rgba(244, 135, 113, 0.1);
 }
