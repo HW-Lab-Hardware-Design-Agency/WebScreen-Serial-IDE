@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebScreen Serial IDE</title>
+    <meta name="description" content="Interactive development environment for WebScreen with serial commands and JavaScript editor">
+    
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/scroll/simplescrollbars.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldgutter.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>WebScreen Serial IDE</h1>
+                <div class="connection-status">
+                    <button id="connectBtn" class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v8m0 4v8m-7-7h4m6 0h4"></path>
+                        </svg>
+                        Connect Device
+                    </button>
+                    <span id="connectionStatus" class="status-badge disconnected">Disconnected</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Editor -->
+            <div class="editor-panel">
+                <div class="panel-header">
+                    <div class="tabs">
+                        <button class="tab active" data-tab="editor">JavaScript Editor</button>
+                        <button class="tab" data-tab="files">File Manager</button>
+                    </div>
+                    <div class="editor-actions">
+                        <input type="text" id="filename" placeholder="script.js" class="filename-input">
+                        <button id="saveBtn" class="btn btn-sm" title="Save to Device">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                        </button>
+                        <button id="runBtn" class="btn btn-sm btn-success" title="Run Script">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Code Editor Tab -->
+                <div class="tab-content" id="editor-tab">
+                    <div id="codeEditor"></div>
+                </div>
+                
+                <!-- File Manager Tab -->
+                <div class="tab-content hidden" id="files-tab">
+                    <div class="file-manager">
+                        <div class="file-actions">
+                            <button id="refreshFiles" class="btn btn-sm">Refresh</button>
+                            <button id="downloadFile" class="btn btn-sm">Download</button>
+                            <button id="deleteFile" class="btn btn-sm btn-danger">Delete</button>
+                        </div>
+                        <div id="fileList" class="file-list">
+                            <p class="placeholder">Connect device to view files</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Terminal -->
+            <div class="terminal-panel">
+                <div class="panel-header">
+                    <h3>Serial Console</h3>
+                    <div class="terminal-actions">
+                        <button id="clearBtn" class="btn btn-sm" title="Clear Terminal">Clear</button>
+                        <button id="downloadLog" class="btn btn-sm" title="Download Log">Export</button>
+                    </div>
+                </div>
+                
+                <div class="terminal-container">
+                    <div id="terminalOutput" class="terminal-output"></div>
+                    <div class="terminal-input-container">
+                        <span class="prompt">WebScreen&gt;</span>
+                        <input type="text" id="terminalInput" class="terminal-input" placeholder="Type command or / for help">
+                        <button id="sendBtn" class="btn btn-sm">Send</button>
+                    </div>
+                </div>
+
+                <!-- Quick Commands -->
+                <div class="quick-commands">
+                    <h4>Quick Commands</h4>
+                    <div class="command-grid">
+                        <button class="cmd-btn" data-cmd="/help">Help</button>
+                        <button class="cmd-btn" data-cmd="/stats">Stats</button>
+                        <button class="cmd-btn" data-cmd="/info">Info</button>
+                        <button class="cmd-btn" data-cmd="/ls">List Files</button>
+                        <button class="cmd-btn" data-cmd="/monitor mem">Monitor</button>
+                        <button class="cmd-btn" data-cmd="/ping google.com">Ping</button>
+                        <button class="cmd-btn" data-cmd="/backup save">Backup</button>
+                        <button class="cmd-btn" data-cmd="/reboot">Reboot</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="cursorPosition">Ln 1, Col 1</span>
+                <span class="separator">|</span>
+                <span id="fileStatus">Ready</span>
+            </div>
+            <div class="status-right">
+                <span id="baudRate">115200 baud</span>
+                <span class="separator">|</span>
+                <span id="deviceInfo">No device</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- CodeMirror JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/comment/comment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/javascript-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/scroll/simplescrollbars.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/search/searchcursor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/search/search.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldgutter.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/brace-fold.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="serial.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
