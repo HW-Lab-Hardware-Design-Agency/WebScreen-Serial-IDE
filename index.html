@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebScreen Serial IDE</title>
     <meta name="description" content="Interactive development environment for WebScreen with serial commands and JavaScript editor">
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
     
     <!-- CodeMirror CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
@@ -23,6 +24,20 @@
             <div class="header-content">
                 <h1>WebScreen Serial IDE</h1>
                 <div class="connection-status">
+                    <button id="themeToggle" class="btn btn-sm theme-toggle" title="Switch Theme">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                        <span id="themeLabel">Focus</span>
+                    </button>
                     <button id="connectBtn" class="btn btn-primary">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2v8m0 4v8m-7-7h4m6 0h4"></path>
@@ -36,10 +51,11 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Left Panel - Editor -->
-            <div class="editor-panel">
+            <!-- Main Panel - Tabs -->
+            <div class="main-panel">
                 <div class="panel-header">
                     <div class="tabs">
+                        <button class="tab" data-tab="console">Serial Console</button>
                         <button class="tab active" data-tab="editor">JavaScript Editor</button>
                         <button class="tab" data-tab="files">File Manager</button>
                     </div>
@@ -57,6 +73,20 @@
                                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
                             </svg>
                         </button>
+                        <button id="clearBtn" class="btn btn-sm" title="Clear Terminal">Clear</button>
+                        <button id="downloadLog" class="btn btn-sm" title="Download Log">Export</button>
+                    </div>
+                </div>
+                
+                <!-- Serial Console Tab -->
+                <div class="tab-content hidden" id="console-tab">
+                    <div class="terminal-container">
+                        <div id="terminalOutput" class="terminal-output"></div>
+                        <div class="terminal-input-container">
+                            <span class="prompt">WebScreen&gt;</span>
+                            <input type="text" id="terminalInput" class="terminal-input" placeholder="Type command or / for help">
+                            <button id="sendBtn" class="btn btn-sm">Send</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -80,37 +110,107 @@
                 </div>
             </div>
 
-            <!-- Right Panel - Terminal -->
-            <div class="terminal-panel">
-                <div class="panel-header">
-                    <h3>Serial Console</h3>
-                    <div class="terminal-actions">
-                        <button id="clearBtn" class="btn btn-sm" title="Clear Terminal">Clear</button>
-                        <button id="downloadLog" class="btn btn-sm" title="Download Log">Export</button>
+            <!-- Right Sidebar -->
+            <div class="sidebar">
+                <!-- Terminal Image -->
+                <div class="sidebar-section">
+                    <img src="assets/animation.gif" alt="Terminal Animation" class="terminal-image" />
+                </div>
+                
+                <!-- Quick Commands -->
+                <div class="sidebar-section">
+                    <div class="quick-commands">
+                        <h4>Quick Commands</h4>
+                        <div class="command-grid">
+                            <button class="cmd-btn" data-cmd="/help">Help</button>
+                            <button class="cmd-btn" data-cmd="/stats">Stats</button>
+                            <button class="cmd-btn" data-cmd="/info">Info</button>
+                            <button class="cmd-btn" data-cmd="/ls">List Files</button>
+                            <button class="cmd-btn" data-cmd="/monitor mem">Monitor</button>
+                            <button class="cmd-btn" data-cmd="/ping google.com">Ping</button>
+                            <button class="cmd-btn" data-cmd="/backup save">Backup</button>
+                            <button class="cmd-btn" data-cmd="/reboot">Reboot</button>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="terminal-container">
-                    <div id="terminalOutput" class="terminal-output"></div>
-                    <div class="terminal-input-container">
-                        <span class="prompt">WebScreen&gt;</span>
-                        <input type="text" id="terminalInput" class="terminal-input" placeholder="Type command or / for help">
-                        <button id="sendBtn" class="btn btn-sm">Send</button>
-                    </div>
-                </div>
-
-                <!-- Quick Commands -->
-                <div class="quick-commands">
-                    <h4>Quick Commands</h4>
-                    <div class="command-grid">
-                        <button class="cmd-btn" data-cmd="/help">Help</button>
-                        <button class="cmd-btn" data-cmd="/stats">Stats</button>
-                        <button class="cmd-btn" data-cmd="/info">Info</button>
-                        <button class="cmd-btn" data-cmd="/ls">List Files</button>
-                        <button class="cmd-btn" data-cmd="/monitor mem">Monitor</button>
-                        <button class="cmd-btn" data-cmd="/ping google.com">Ping</button>
-                        <button class="cmd-btn" data-cmd="/backup save">Backup</button>
-                        <button class="cmd-btn" data-cmd="/reboot">Reboot</button>
+                <!-- Documentation -->
+                <div class="sidebar-section">
+                    <div class="documentation">
+                        <h4>WebScreen API Documentation</h4>
+                        <div class="docs-content">
+                            <div class="doc-section">
+                                <h5>Display Functions</h5>
+                                <div class="doc-item">
+                                    <code>create_label_with_text('text')</code>
+                                    <p>Creates a text label on screen</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>create_image('filename')</code>
+                                    <p>Display an image file</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>set_background_color('#color')</code>
+                                    <p>Set screen background color</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>draw_rect(x, y, w, h, color)</code>
+                                    <p>Draw a colored rectangle</p>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-section">
+                                <h5>Network Functions</h5>
+                                <div class="doc-item">
+                                    <code>wifi_connect('ssid', 'pass')</code>
+                                    <p>Connect to WiFi network</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>http_get('url')</code>
+                                    <p>Perform HTTP GET request</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>http_post('url', data)</code>
+                                    <p>Perform HTTP POST request</p>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-section">
+                                <h5>Storage Functions</h5>
+                                <div class="doc-item">
+                                    <code>sd_write_file('path', data)</code>
+                                    <p>Write data to SD card file</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>sd_read_file('path')</code>
+                                    <p>Read data from SD card file</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>sd_list_files('/')</code>
+                                    <p>List files in directory</p>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-section">
+                                <h5>Utility Functions</h5>
+                                <div class="doc-item">
+                                    <code>delay(milliseconds)</code>
+                                    <p>Pause execution for specified time</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>print(message)</code>
+                                    <p>Output message to serial console</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>parse_json_value(json, key)</code>
+                                    <p>Extract value from JSON string</p>
+                                </div>
+                                <div class="doc-item">
+                                    <code>get_timestamp()</code>
+                                    <p>Get current unix timestamp</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -122,6 +222,25 @@
                 <span id="cursorPosition">Ln 1, Col 1</span>
                 <span class="separator">|</span>
                 <span id="fileStatus">Ready</span>
+            </div>
+            <div class="credits">
+                <a class="navbar-brand" href="https://webscreen.cc/" target="_blank">
+                    <img src="assets/logo.png" class="logo" alt="WebScreen Logo">
+                </a>
+                <p xmlns:cc="http://creativecommons.org/ns#" xmlns:dct="http://purl.org/dc/terms/">
+                    <a property="dct:title" rel="cc:attributionURL" href="https://webscreen.cc/" target="_blank">
+                        <strong>WebScreen</strong>
+                    </a> by 
+                    <a rel="cc:attributionURL dct:creator" property="cc:attributionName" href="https://hwlab.io/" target="_blank">
+                        <strong>HW Media Lab LLC</strong>
+                    </a> is licensed under 
+                    <a href="https://creativecommons.org/licenses/by-sa/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer">
+                        <strong>CC BY-SA 4.0</strong>
+                        <img src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" alt="CC">
+                        <img src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" alt="BY">
+                        <img src="https://mirrors.creativecommons.org/presskit/icons/sa.svg?ref=chooser-v1" alt="SA">
+                    </a>
+                </p>
             </div>
             <div class="status-right">
                 <span id="baudRate">115200 baud</span>

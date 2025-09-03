@@ -5,11 +5,13 @@ class WebScreenIDE {
         this.currentFile = '';
         this.fileList = [];
         this.isMonitoring = false;
+        this.currentTheme = 'retro';
         
         this.init();
     }
 
     init() {
+        this.loadTheme();
         this.initEditor();
         this.setupEventListeners();
         this.setupSerialEvents();
@@ -67,6 +69,11 @@ create_label_with_text('Hello WebScreen!');
     }
 
     setupEventListeners() {
+        // Theme toggle button
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            this.toggleTheme();
+        });
+
         // Connection button
         document.getElementById('connectBtn').addEventListener('click', () => {
             this.toggleConnection();
@@ -416,6 +423,48 @@ create_label_with_text('Hello WebScreen!');
 
     updateFileStatus(status) {
         document.getElementById('fileStatus').textContent = status;
+    }
+
+    // Theme Management
+    loadTheme() {
+        // Check for URL parameter first
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlTheme = urlParams.get('mode');
+        
+        let theme;
+        if (urlTheme && (urlTheme === 'retro' || urlTheme === 'focus')) {
+            theme = urlTheme;
+            // Save URL theme to localStorage
+            localStorage.setItem('webscreen-ide-theme', theme);
+        } else {
+            // Fall back to saved theme or default
+            theme = localStorage.getItem('webscreen-ide-theme') || 'retro';
+        }
+        
+        this.setTheme(theme);
+    }
+
+    setTheme(theme) {
+        this.currentTheme = theme;
+        document.body.setAttribute('data-theme', theme);
+        
+        // Update theme label
+        const themeLabel = document.getElementById('themeLabel');
+        themeLabel.textContent = theme === 'retro' ? 'Focus' : 'Retro';
+        
+        // Update CodeMirror theme
+        if (this.codeEditor) {
+            const cmTheme = theme === 'focus' ? 'default' : 'dracula';
+            this.codeEditor.setOption('theme', cmTheme);
+        }
+        
+        // Save to localStorage
+        localStorage.setItem('webscreen-ide-theme', theme);
+    }
+
+    toggleTheme() {
+        const newTheme = this.currentTheme === 'retro' ? 'focus' : 'retro';
+        this.setTheme(newTheme);
     }
 }
 

@@ -1,20 +1,25 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT) ![Issues](https://img.shields.io/github/issues/HW-Lab-Hardware-Design-Agency/WebScreen-Serial-IDE) [![image](https://img.shields.io/badge/website-WebScreen.cc-D31027)](https://webscreen.cc) [![image](https://img.shields.io/badge/view_on-CrowdSupply-099)](https://www.crowdsupply.com/hw-media-lab/webscreen)
+
 # WebScreen Serial IDE
 
-A web-based integrated development environment for WebScreen devices, providing serial communication, code editing, and command execution capabilities.
+![til](./assets/animation.gif)
+
+A modern, web-based integrated development environment for WebScreen devices with dual theme support, providing serial communication, code editing, and command execution capabilities.
 
 ## Features
 
-### 🚀 **Core Features**
+### **Core Features**
 - **Serial Communication**: Direct Web Serial API connection to WebScreen devices
-- **Code Editor**: Full-featured JavaScript editor with syntax highlighting and line numbers
-- **Command Interface**: Execute all WebScreen serial commands interactively
-- **File Management**: Upload, list, and manage files on the device
-- **Real-time Terminal**: Live serial console with command history
+- **Dual Theme System**: Switch between "Retro" (amber phosphor) and "Focus" (VS Code-like) themes
+- **Tabbed Interface**: Organized workspace with Serial Console, JavaScript Editor, and File Manager
+- **URL Theme Selection**: Set theme via URL parameter (`?mode=retro` or `?mode=focus`)
+- **Real-time Terminal**: Live serial console with command history and auto-completion
+- **File Management**: Upload, list, download, and manage files on the device
 
-### 💻 **Code Editor**
-- **Syntax Highlighting**: JavaScript syntax highlighting with Dracula theme
-- **Line Numbers**: Easy navigation with line numbering
-- **Auto-completion**: IntelliSense-style code completion
+### **Code Editor**
+- **Syntax Highlighting**: JavaScript syntax highlighting with theme-appropriate colors
+- **IntelliSense**: Auto-completion with WebScreen API suggestions
+- **Line Numbers**: Easy navigation with contextual line numbering
 - **Bracket Matching**: Automatic bracket pairing and highlighting
 - **Code Folding**: Collapse code blocks for better navigation
 - **Search & Replace**: Built-in search functionality (Ctrl+F)
@@ -24,8 +29,21 @@ A web-based integrated development environment for WebScreen devices, providing 
   - `Ctrl+/`: Toggle comments
   - `Ctrl+Space`: Trigger autocomplete
 
-### 🔧 **Serial Commands**
-All WebScreen serial commands are supported:
+### **Theme System**
+#### Retro Theme
+- **Amber Phosphor Colors**: Classic orange/yellow terminal aesthetic
+- **Scan Line Effects**: Authentic CRT monitor simulation
+- **Glowing Elements**: Neon effects on buttons and text
+- **Terminal Animation**: Animated background with retro styling
+
+#### Focus Theme
+- **VS Code Inspired**: Clean, modern development environment
+- **Reduced Eye Strain**: Muted colors perfect for long coding sessions
+- **No Animations**: Distraction-free interface
+- **Professional Layout**: Clean typography and spacing
+
+### **Serial Commands**
+All WebScreen serial commands are supported with auto-completion:
 - **Core**: `/help`, `/stats`, `/info`, `/reboot`
 - **File Operations**: `/write`, `/ls`, `/cat`, `/rm`
 - **Network**: `/wget`, `/ping`
@@ -33,12 +51,13 @@ All WebScreen serial commands are supported:
 - **Monitoring**: `/monitor cpu/mem/net`
 - **Script Management**: `/load`, `/run`
 
-### 🎨 **User Interface**
-- **Dark Theme**: Beautiful dark theme optimized for coding
-- **Responsive Layout**: Works on desktop and tablet devices
-- **Split View**: Side-by-side editor and terminal
-- **Quick Commands**: One-click access to common commands
-- **Status Bar**: Real-time connection and cursor information
+### **User Interface**
+- **Responsive Design**: Works on desktop and tablet devices
+- **Tabbed Workspace**: Separate areas for console, editor, and files
+- **Quick Commands**: One-click access to common WebScreen commands
+- **API Documentation**: Built-in reference for WebScreen JavaScript API
+- **Status Bar**: Real-time connection info with WebScreen branding
+- **Credits Section**: Creative Commons licensing information
 
 ## Getting Started
 
@@ -53,17 +72,29 @@ All WebScreen serial commands are supported:
    Open index.html in a supported browser
    ```
 
-2. **Connect Device**
+2. **Choose Theme** (Optional)
+   ```
+   Add theme parameter to URL:
+   - file:///path/to/index.html?mode=retro  (amber phosphor theme)
+   - file:///path/to/index.html?mode=focus  (clean development theme)
+   ```
+
+3. **Connect Device**
    - Click "Connect Device" button
    - Select your WebScreen device from the serial port list
    - Wait for successful connection
 
-3. **Write Code**
-   - Use the JavaScript editor to write your WebScreen applications
-   - Take advantage of syntax highlighting and autocomplete
+4. **Navigate Interface**
+   - **Serial Console**: Direct command-line interaction
+   - **JavaScript Editor**: Write and edit WebScreen applications
+   - **File Manager**: Browse and manage device files
+
+5. **Write Code**
+   - Use the JavaScript editor with full syntax highlighting
+   - Take advantage of WebScreen API autocomplete
    - Save your work with Ctrl+S or the Save button
 
-4. **Execute Commands**
+6. **Execute Commands**
    - Use the terminal to execute serial commands
    - Try quick commands like `/stats` or `/help`
    - Upload and run scripts with F5 or the Run button
@@ -85,40 +116,50 @@ create_label_with_text('Temperature: ' + temp + '°C');
 sd_write_file('/config.txt', 'My configuration');
 let config = sd_read_file('/config.txt');
 print('Config loaded: ' + config);
+
+// Graphics example
+draw_rect(50, 50, 100, 100, '#ff6b6b');
+create_image('logo.png');
 ```
 
 ## Development Workflow
 
 ### 1. **Rapid Prototyping**
 ```
-1. Write JavaScript code in the editor
-2. Press F5 to upload and run immediately
-3. See results on WebScreen display
-4. Iterate quickly without SD card swapping
+1. Choose your preferred theme (Retro for creative work, Focus for long sessions)
+2. Write JavaScript code in the editor with API autocomplete
+3. Press F5 to upload and run immediately
+4. See results on WebScreen display
+5. Iterate quickly without SD card swapping
 ```
 
 ### 2. **File Management**
 ```
-1. Use /ls to see existing files
-2. Save scripts with custom filenames
-3. Load different applications with /load
-4. Backup configurations with /backup
+1. Switch to File Manager tab
+2. Use /ls to see existing files
+3. Save scripts with custom filenames
+4. Download files for backup
+5. Load different applications with /load
 ```
 
 ### 3. **System Monitoring**
 ```
-1. Use /stats to monitor memory usage
-2. Use /monitor to see real-time system stats
-3. Use /ping to test network connectivity
-4. Debug issues with serial console output
+1. Use Serial Console for real-time monitoring
+2. Use /stats to monitor memory usage
+3. Use /monitor for continuous system stats
+4. Use /ping to test network connectivity
+5. Debug issues with live serial output
 ```
 
-### 4. **Configuration Management**
+### 4. **Theme Selection**
 ```
-1. Use /config get to read settings
-2. Use /config set to update settings
-3. Use /backup to save configurations
-4. Use /reboot to apply changes
+URL Parameters:
+- ?mode=retro  - Amber phosphor terminal theme
+- ?mode=focus  - Clean VS Code-like theme
+
+Button Toggle:
+- Click theme button in header to switch themes
+- Theme preference is saved automatically
 ```
 
 ## Technical Details
@@ -126,8 +167,15 @@ print('Config loaded: ' + config);
 ### Architecture
 - **Frontend**: Vanilla JavaScript with CodeMirror editor
 - **Serial Communication**: Web Serial API for device connection
-- **Styling**: Modern CSS with dark theme and responsive design
+- **Theming**: CSS custom properties with dual-theme system
+- **UI Framework**: Tabbed interface with responsive design
 - **No Backend**: Pure client-side application
+
+### Theme System
+- **CSS Variables**: Dynamic theme switching using custom properties
+- **LocalStorage**: Theme preference persistence
+- **URL Parameters**: Direct theme selection via query strings
+- **CodeMirror Integration**: Editor themes sync with UI themes
 
 ### Browser Compatibility
 - ✅ **Chrome 89+**: Full support
@@ -139,24 +187,28 @@ print('Config loaded: ' + config);
 ### File Structure
 ```
 WebScreen-Serial-IDE/
-├── index.html          # Main HTML structure
-├── style.css           # CSS styling and theme
+├── index.html          # Main HTML with tabbed interface
+├── style.css           # Dual-theme CSS system
 ├── serial.js           # Serial communication manager
-├── app.js              # Main application logic
-└── README.md           # Documentation
+├── app.js              # Main application with theme management
+├── assets/
+│   ├── animation.gif   # Terminal animation for retro theme
+│   ├── logo.png        # WebScreen logo
+│   └── favicon.ico     # Browser favicon
+└── README.md           # This documentation
 ```
 
 ## API Reference
 
 ### SerialManager Class
-The core serial communication functionality:
+Core serial communication functionality:
 
 ```javascript
 // Connection management
 await serial.connect()
 await serial.disconnect()
 
-// Command execution
+// Command execution with auto-completion
 await serial.sendCommand('/help')
 await serial.sendFile('script.js', content)
 
@@ -168,7 +220,7 @@ await serial.backup('save', 'production')
 ```
 
 ### WebScreenIDE Class
-Main application controller:
+Main application controller with theme management:
 
 ```javascript
 // Editor operations
@@ -176,42 +228,57 @@ ide.saveFile()
 ide.runScript()
 ide.clearTerminal()
 
+// Theme management
+ide.loadTheme()           // Load theme from URL or localStorage
+ide.setTheme('retro')     // Set specific theme
+ide.toggleTheme()         // Switch between themes
+
 // UI management
-ide.switchTab('files')
+ide.switchTab('files')    // Switch between Console/Editor/Files
 ide.updateConnectionStatus(connected)
 ide.appendToTerminal(message, className)
 ```
 
-## Customization
-
-### Themes
-The IDE uses the Dracula theme by default. To change themes:
-
+### Theme Management
 ```javascript
-// In app.js, modify the CodeMirror initialization:
-this.codeEditor = CodeMirror(document.getElementById('codeEditor'), {
-    theme: 'monokai', // Change theme here
-    // ... other options
-});
+// URL parameter theme selection
+// ?mode=retro or ?mode=focus
+
+// Manual theme switching
+const ide = window.webScreenIDE;
+ide.setTheme('retro');    // Amber phosphor theme
+ide.setTheme('focus');    // VS Code theme
 ```
 
-Available themes: `dracula`, `monokai`, `material`, `solarized`, etc.
+## Customization
 
-### Commands
-Add custom quick commands by modifying the HTML:
+### Adding Custom Themes
+Modify CSS custom properties to create new themes:
+
+```css
+[data-theme="custom"] {
+    --color-primary: #00ff00;
+    --bg-primary: #001100;
+    --shadow-glow: 0 0 10px #00ff00;
+    /* ... other theme variables */
+}
+```
+
+### Custom Quick Commands
+Add custom commands by modifying the HTML:
 
 ```html
 <button class="cmd-btn" data-cmd="/custom command">Custom</button>
 ```
 
-### Keyboard Shortcuts
-Modify keyboard shortcuts in the editor configuration:
+### Editor Customization
+Modify keyboard shortcuts and editor behavior:
 
 ```javascript
 extraKeys: {
-    'Ctrl-R': () => this.runScript(),      // Custom shortcut
-    'Ctrl-Shift-S': () => this.saveAs(),   // Save As functionality
-    // ... other shortcuts
+    'Ctrl-R': () => this.runScript(),
+    'Ctrl-Shift-S': () => this.saveAs(),
+    'F1': () => this.showHelp(),
 }
 ```
 
@@ -221,6 +288,11 @@ extraKeys: {
 - **Device not found**: Ensure WebScreen is connected via USB and drivers are installed
 - **Permission denied**: Try disconnecting and reconnecting the device
 - **Port busy**: Close other serial applications (Arduino IDE, etc.)
+
+### Theme Issues
+- **Theme not loading**: Check URL parameter spelling (`mode=retro` or `mode=focus`)
+- **Theme not persisting**: Ensure localStorage is enabled in browser
+- **Mixed theme elements**: Hard refresh the page (Ctrl+F5)
 
 ### Editor Issues
 - **Syntax highlighting not working**: Check if JavaScript mode is loaded
@@ -232,31 +304,65 @@ extraKeys: {
 - **Garbled output**: Check baud rate (should be 115200)
 - **Timeout errors**: Ensure stable USB connection
 
+## WebScreen API Reference
+
+### Display Functions
+- `create_label_with_text('text')` - Creates a text label on screen
+- `create_image('filename')` - Display an image file
+- `set_background_color('#color')` - Set screen background color
+- `draw_rect(x, y, w, h, color)` - Draw a colored rectangle
+
+### Network Functions
+- `wifi_connect('ssid', 'pass')` - Connect to WiFi network
+- `http_get('url')` - Perform HTTP GET request
+- `http_post('url', data)` - Perform HTTP POST request
+
+### Storage Functions
+- `sd_write_file('path', data)` - Write data to SD card file
+- `sd_read_file('path')` - Read data from SD card file
+- `sd_list_files('/')` - List files in directory
+
+### Utility Functions
+- `delay(milliseconds)` - Pause execution for specified time
+- `print(message)` - Output message to serial console
+- `parse_json_value(json, key)` - Extract value from JSON string
+- `get_timestamp()` - Get current unix timestamp
+
 ## Contributing
 
 ### Development Setup
 1. Clone the repository
 2. Open `index.html` in a supported browser
 3. Connect a WebScreen device for testing
-4. Make modifications and test locally
+4. Test both themes with URL parameters
+5. Make modifications and test locally
 
 ### Adding Features
+- **New Themes**: Extend CSS custom properties system
 - **New Commands**: Add to SerialManager class methods
 - **UI Components**: Modify HTML structure and CSS styling
 - **Editor Features**: Extend CodeMirror configuration
-- **File Operations**: Enhance file management capabilities
+
+### Getting Help
+
+| Type | Resource | Description |
+|------|----------|-------------|
+| 🐛 **Bug Reports** | [GitHub Issues](https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Serial-IDE/issues) | Report bugs and request features |
+| 💬 **Discussions** | [GitHub Discussions](https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Serial-IDE/discussions) | Ask questions and share ideas |
+| 📖 **Documentation** | [docs/](docs/) | API reference and guides |
+| 🌐 **Website** | [WebScreen.cc](https://webscreen.cc) | Official project website |
+| 🛒 **Hardware** | [CrowdSupply](https://www.crowdsupply.com/hw-media-lab/webscreen) | Purchase WebScreen hardware |
+
+### Support the Project
+
+If WebScreen has been useful for your projects:
+
+- ⭐ **Star the repo** to show your support
+- 🍴 **Fork and contribute** to make it better  
+- 🐛 **Report issues** to help us improve
+- 📖 **Improve documentation** for other users
+- 💰 **Sponsor development** to fund new features
 
 ## License
 
-This project follows the same license as the WebScreen project. Please refer to the main WebScreen repository for licensing details.
-
-## Support
-
-For issues and questions:
-- **WebScreen Hardware**: [CrowdSupply](https://www.crowdsupply.com/hw-media-lab/webscreen)
-- **Software Issues**: [GitHub Issues](https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Software/issues)
-- **Community**: [WebScreen Website](https://webscreen.cc)
-
----
-
-Transform your WebScreen development workflow with this powerful web-based IDE!
+This project is open source. See the [LICENSE](LICENSE) file for details.
