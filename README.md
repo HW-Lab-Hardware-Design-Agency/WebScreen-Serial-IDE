@@ -2,7 +2,7 @@
 
 # WebScreen Serial IDE
 
-![til](./assets/animation.gif)
+![til](./public/assets/animation.gif)
 
 A modern, web-based integrated development environment for WebScreen devices with dual theme support, providing serial communication, code editing, and command execution capabilities.
 
