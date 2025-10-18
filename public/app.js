@@ -7,13 +7,22 @@ class WebScreenIDE {
         this.isMonitoring = false;
         this.currentTheme = 'retro';
 
-        // Embedder configuration
+        // Embedder configuration (from official CLI package)
         this.embedderConfig = {
             authUrl: 'https://app.embedder.dev/',
+            authDomain: 'embedder-dev.firebaseapp.com',
             tokenApiUrl: 'https://securetoken.googleapis.com/v1/token',
             apiKey: 'AIzaSyDuNXvHd-GvTrmXG6_2TnrfqRWo-ApPd3s',
             projectId: 'embedder-dev',
-            chatApiUrl: 'https://api.embedder.dev/v1/chat'
+            storageBucket: 'embedder-dev.firebasestorage.app',
+            messagingSenderId: '547074918538',
+            appId: '1:547074918538:web:b5495d2347046fd29e8573',
+            measurementId: 'G-4KT5CW28KM',
+            // Actual backend endpoints from CLI package
+            backendUrl: 'https://backend-service-prod.embedder.dev',
+            proxyAnthropicUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/anthropic/',
+            proxyOpenAIUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/openai/',
+            proxyGoogleUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/google/'
         };
 
         this.embedderConversation = [];
@@ -536,9 +545,14 @@ create_label_with_text('Hello WebScreen!');
 
     // Embedder Methods
     initEmbedder() {
-        // Set callback URL
+        console.log('[Embedder] Initializing...');
+
+        // Display callback URL for debugging
         const callbackUrl = window.location.href.split('?')[0];
-        document.getElementById('callbackUrl').value = callbackUrl;
+        const callbackDisplay = document.getElementById('callbackUrlDisplay');
+        if (callbackDisplay) {
+            callbackDisplay.textContent = callbackUrl;
+        }
 
         // Check if returning from auth
         this.checkEmbedderAuthCallback();
@@ -563,21 +577,37 @@ create_label_with_text('Hello WebScreen!');
         const token = urlParams.get('token');
         const error = urlParams.get('error');
 
+        console.log('[Embedder] Checking auth callback...', { token: !!token, error });
+
         if (error) {
+            console.error('[Embedder] Authentication failed:', error);
+            // Switch to Embedder tab to show error
+            this.switchTab('embedder');
             this.updateEmbedderStatus(`Authentication failed: ${error}`, 'error');
-            window.history.replaceState({}, document.title, window.location.pathname);
+            // Clean URL after a delay to ensure message is visible
+            setTimeout(() => {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }, 100);
             return;
         }
 
         if (token) {
+            console.log('[Embedder] Token received, processing...');
+            // Switch to Embedder tab to show success
+            this.switchTab('embedder');
             this.handleEmbedderAuthSuccess(token);
-            window.history.replaceState({}, document.title, window.location.pathname);
+            // Clean URL after a delay
+            setTimeout(() => {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }, 100);
         }
     }
 
     handleEmbedderAuthSuccess(token) {
         try {
+            console.log('[Embedder] Parsing JWT token...');
             const payload = this.parseJWT(token);
+            console.log('[Embedder] JWT payload:', payload);
 
             const credentials = {
                 accessToken: token,
@@ -591,13 +621,15 @@ create_label_with_text('Hello WebScreen!');
                 timestamp: Date.now()
             };
 
+            console.log('[Embedder] Saving credentials...');
             this.saveEmbedderCredentials(credentials);
             this.updateEmbedderStatus('Authentication successful!', 'success');
             this.updateEmbedderUI();
+            console.log('[Embedder] Authentication complete!');
 
         } catch (error) {
+            console.error('[Embedder] Token processing error:', error);
             this.updateEmbedderStatus(`Error processing token: ${error.message}`, 'error');
-            console.error('Token processing error:', error);
         }
     }
 
@@ -621,8 +653,15 @@ create_label_with_text('Hello WebScreen!');
         authUrl.searchParams.set('callback', callbackUrl);
         authUrl.searchParams.set('source', 'webscreen-ide');
 
+        console.log('[Embedder] Starting authentication...');
+        console.log('[Embedder] Callback URL:', callbackUrl);
+        console.log('[Embedder] Auth URL:', authUrl.toString());
+
         this.updateEmbedderStatus('Redirecting to Embedder authentication...', 'info');
-        window.location.href = authUrl.toString();
+
+        setTimeout(() => {
+            window.location.href = authUrl.toString();
+        }, 500);
     }
 
     async embedderRefreshToken() {
@@ -772,11 +811,13 @@ create_label_with_text('Hello WebScreen!');
             statusEl.className = `status-${type}`;
             statusEl.style.display = 'block';
 
-            // Auto-hide success/info messages after 3 seconds
-            if (type === 'success' || type === 'info') {
+            console.log('[Embedder] Status update:', type, message);
+
+            // Auto-hide success/info messages after 5 seconds (not errors)
+            if (type === 'success' || (type === 'info' && !message.includes('Redirecting'))) {
                 setTimeout(() => {
                     statusEl.style.display = 'none';
-                }, 3000);
+                }, 5000);
             }
         }
     }
@@ -835,24 +876,68 @@ create_label_with_text('Hello WebScreen!');
     }
 
     async callEmbedderAPI(messages, token) {
-        const response = await fetch(this.embedderConfig.chatApiUrl, {
+        const model = this.embedderSettings.model;
+
+        // Determine which proxy to use based on model
+        let proxyUrl, endpoint, requestBody, isAnthropic;
+
+        if (model.startsWith('claude-')) {
+            // Anthropic models
+            proxyUrl = this.embedderConfig.proxyAnthropicUrl;
+            endpoint = 'v1/messages';
+            isAnthropic = true;
+            requestBody = {
+                model: model,
+                messages: messages,
+                max_tokens: 4096,
+                temperature: this.embedderSettings.temperature
+            };
+        } else if (model.startsWith('gpt-')) {
+            // OpenAI models
+            proxyUrl = this.embedderConfig.proxyOpenAIUrl;
+            endpoint = 'v1/chat/completions';
+            isAnthropic = false;
+            requestBody = {
+                model: model,
+                messages: messages,
+                temperature: this.embedderSettings.temperature
+            };
+        } else {
+            throw new Error(`Unsupported model: ${model}`);
+        }
+
+        console.log('[Embedder] API Request:', { proxyUrl, endpoint, model });
+
+        const response = await fetch(proxyUrl + endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                messages: messages,
-                model: this.embedderSettings.model,
-                temperature: this.embedderSettings.temperature
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
+            const errorText = await response.text();
+            console.error('[Embedder] API Error Response:', errorText);
+            throw new Error(`API request failed: ${response.status} - ${errorText}`);
         }
 
-        return await response.json();
+        const data = await response.json();
+        console.log('[Embedder] API Response:', data);
+
+        // Parse response based on API type
+        if (isAnthropic) {
+            // Anthropic response format: { content: [{ type: "text", text: "..." }] }
+            return {
+                message: data.content?.[0]?.text || 'No response'
+            };
+        } else {
+            // OpenAI response format: { choices: [{ message: { content: "..." } }] }
+            return {
+                message: data.choices?.[0]?.message?.content || 'No response'
+            };
+        }
     }
 
     renderEmbedderConversation() {

@@ -110,7 +110,7 @@
                             </div>
 
                             <!-- Auth Status Messages -->
-                            <div id="authStatus" class="status-info" style="display: none;"></div>
+                            <div id="authStatus" class="status-info" style="display: none; margin: 10px 15px; padding: 10px; border-radius: 4px;"></div>
 
                             <!-- Conversation Display -->
                             <div id="embedderConversation" class="embedder-conversation">
@@ -161,6 +161,10 @@
                                     <button id="loginBtn" class="btn btn-primary btn-sm">Login</button>
                                     <button id="logoutBtn" class="btn btn-danger btn-sm hidden">Logout</button>
                                     <button id="refreshTokenBtn" class="btn btn-sm hidden">Refresh</button>
+                                </div>
+                                <div class="info-box-compact" style="margin-top: 10px; font-size: 10px; opacity: 0.7;">
+                                    <div><strong>Callback:</strong></div>
+                                    <div id="callbackUrlDisplay" style="word-break: break-all;"></div>
                                 </div>
                             </div>
 
