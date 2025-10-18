@@ -157,19 +157,37 @@
                             <!-- Authentication -->
                             <div class="embedder-section compact">
                                 <h4>Authentication</h4>
-                                <div class="button-group">
-                                    <button id="loginBtn" class="btn btn-primary btn-sm">Login with Embedder</button>
-                                    <button id="logoutBtn" class="btn btn-danger btn-sm hidden">Logout</button>
-                                    <button id="refreshTokenBtn" class="btn btn-sm hidden">Refresh Token</button>
+
+                                <!-- Not Authenticated View -->
+                                <div id="authMethodSelection" class="button-group">
+                                    <button id="loginBrowserBtn" class="btn btn-primary btn-sm">Browser Redirect</button>
+                                    <button id="loginDeviceCodeBtn" class="btn btn-primary btn-sm">Device Code</button>
                                 </div>
+
+                                <!-- Device Code Display (hidden by default) -->
+                                <div id="deviceCodeDisplay" class="hidden" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
+                                    <div style="text-align: center; margin-bottom: 10px;">
+                                        <div style="font-size: 10px; opacity: 0.8; margin-bottom: 5px;">Enter this code at:</div>
+                                        <a id="verificationUrl" href="#" target="_blank" style="font-size: 11px; color: #4CAF50;"></a>
+                                    </div>
+                                    <div style="text-align: center; margin: 10px 0;">
+                                        <div id="deviceCodeValue" style="font-size: 20px; font-weight: bold; color: #4CAF50; letter-spacing: 3px;"></div>
+                                    </div>
+                                    <div id="deviceCodeStatus" style="font-size: 10px; text-align: center; opacity: 0.8; margin-top: 10px;">Waiting for activation...</div>
+                                    <button id="cancelDeviceCode" class="btn btn-sm btn-danger" style="width: 100%; margin-top: 10px; font-size: 10px;">Cancel</button>
+                                </div>
+
+                                <!-- Authenticated View -->
+                                <div id="authenticatedActions" class="button-group hidden">
+                                    <button id="logoutBtn" class="btn btn-danger btn-sm">Logout</button>
+                                    <button id="refreshTokenBtn" class="btn btn-sm">Refresh Token</button>
+                                </div>
+
+                                <!-- Manual Token Input -->
                                 <div style="margin-top: 10px;">
                                     <div style="font-size: 10px; margin-bottom: 5px; opacity: 0.8;">Or paste token manually:</div>
                                     <input type="text" id="manualTokenInput" class="input-field" placeholder="Paste custom token here..." style="font-size: 10px; padding: 4px;">
                                     <button id="submitManualToken" class="btn btn-sm" style="width: 100%; margin-top: 5px; font-size: 10px;">Submit Token</button>
-                                </div>
-                                <div class="info-box-compact" style="margin-top: 10px; font-size: 10px; opacity: 0.7;">
-                                    <div><strong>Auth Method:</strong></div>
-                                    <div id="callbackUrlDisplay" style="word-break: break-all;">Click login to start device flow</div>
                                 </div>
                             </div>
 

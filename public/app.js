@@ -18,11 +18,13 @@ class WebScreenIDE {
             messagingSenderId: '547074918538',
             appId: '1:547074918538:web:b5495d2347046fd29e8573',
             measurementId: 'G-4KT5CW28KM',
-            // Actual backend endpoints from CLI package
+            // Backend endpoints
             backendUrl: 'https://backend-service-prod.embedder.dev',
             proxyAnthropicUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/anthropic/',
             proxyOpenAIUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/openai/',
-            proxyGoogleUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/google/'
+            proxyGoogleUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/google/',
+            // PHP backend for authentication (no CORS issues)
+            phpAuthUrl: 'auth.php'
         };
 
         this.embedderConversation = [];
@@ -30,6 +32,13 @@ class WebScreenIDE {
             model: 'claude-4-5-sonnet',
             temperature: 0.7
         };
+
+        // Device code authentication state
+        this.deviceCodePolling = null;
+        this.deviceCodeData = null;
+
+        // Cached credentials from PHP session
+        this.credentials = null;
 
         this.init();
     }
@@ -168,9 +177,17 @@ create_label_with_text('Hello WebScreen!');
             this.currentFile = e.target.value;
         });
 
-        // Embedder buttons
-        document.getElementById('loginBtn').addEventListener('click', () => {
-            this.startEmbedderAuth();
+        // Embedder authentication buttons
+        document.getElementById('loginBrowserBtn').addEventListener('click', () => {
+            this.startBrowserAuth();
+        });
+
+        document.getElementById('loginDeviceCodeBtn').addEventListener('click', () => {
+            this.startDeviceCodeAuth();
+        });
+
+        document.getElementById('cancelDeviceCode').addEventListener('click', () => {
+            this.cancelDeviceCodeAuth();
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -548,27 +565,33 @@ create_label_with_text('Hello WebScreen!');
     }
 
     // Embedder Methods
-    initEmbedder() {
+    async initEmbedder() {
         console.log('[Embedder] Initializing...');
 
-        // Display info about device code flow
-        const callbackDisplay = document.getElementById('callbackUrlDisplay');
-        if (callbackDisplay) {
-            callbackDisplay.textContent = 'OAuth 2.0 Device Authorization Flow';
+        // Check for authentication callback
+        const urlParams = new URLSearchParams(window.location.search);
+        const authenticated = urlParams.get('authenticated');
+
+        if (authenticated === 'true') {
+            console.log('[Embedder] Authentication callback detected');
+            this.switchTab('embedder');  // Switch to Embedder tab
+            this.updateEmbedderStatus('Authentication successful!', 'success');
+
+            // Clean URL
+            const cleanUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, document.title, cleanUrl);
         }
 
-        // Load saved credentials
-        this.loadEmbedderCredentials();
+        // Load credentials from PHP session
+        await this.loadEmbedderCredentials();
 
         // Update UI
         this.updateEmbedderUI();
 
-        // Auto-refresh embedder UI every second
-        setInterval(() => {
-            const credentials = this.loadEmbedderCredentials();
-            if (credentials && credentials.accessToken) {
-                this.updateEmbedderUI();
-            }
+        // Auto-refresh embedder UI every second to update token expiration
+        setInterval(async () => {
+            await this.loadEmbedderCredentials();
+            this.updateEmbedderUI();
         }, 1000);
     }
 
@@ -603,9 +626,17 @@ create_label_with_text('Hello WebScreen!');
             const data = await response.json();
             console.log('[Embedder] Successfully obtained Firebase ID token');
 
-            // Calculate expiration time
-            const expiresIn = parseInt(data.expiresIn, 10);
-            const expiresAt = Date.now() + (expiresIn * 1000);
+            // Extract expiration from JWT payload (like CLI does)
+            let expiresAt = Date.now() + 3600000; // Default 1 hour
+            try {
+                const payload = this.parseJWT(data.idToken);
+                if (payload && typeof payload.exp === 'number') {
+                    expiresAt = payload.exp * 1000; // Convert to milliseconds
+                    console.log('[Embedder] Token expires at:', new Date(expiresAt).toISOString());
+                }
+            } catch (error) {
+                console.warn('[Embedder] Could not parse token expiry, using default');
+            }
 
             const credentials = {
                 accessToken: data.idToken,
@@ -647,156 +678,199 @@ create_label_with_text('Hello WebScreen!');
         }
     }
 
-    async startEmbedderAuth() {
+    // Token validation (from CLI implementation)
+    validateToken(token) {
         try {
-            console.log('[Embedder] Starting device code flow...');
-            this.updateEmbedderStatus('Starting authentication...', 'info');
-
-            // STEP 1: Start device authentication
-            const startResponse = await fetch(`${this.embedderConfig.backendUrl}/api/v1/auth/device/start`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!startResponse.ok) {
-                throw new Error(`Device start failed: ${startResponse.status}`);
+            if (!token || token.split('.').length !== 3) {
+                return false;
             }
 
-            const deviceData = await startResponse.json();
-            console.log('[Embedder] Device auth started:', deviceData);
+            // Parse JWT payload
+            const payload = this.parseJWT(token);
 
-            // deviceData contains: { userCode, deviceCode, expiresIn, verificationUri }
-            const { userCode, deviceCode, expiresIn, verificationUri } = deviceData;
-
-            // STEP 2: Open popup to verification URL
-            const activationUrl = `${verificationUri}?code=${userCode}`;
-
-            console.log('[Embedder] User Code:', userCode);
-            console.log('[Embedder] Activation URL:', activationUrl);
-
-            this.updateEmbedderStatus(`Code: ${userCode} - Opening activation window...`, 'info');
-
-            const width = 500;
-            const height = 700;
-            const left = window.screen.width / 2 - width / 2;
-            const top = window.screen.height / 2 - height / 2;
-
-            const popup = window.open(
-                activationUrl,
-                'embedder-auth',
-                `width=${width},height=${height},left=${left},top=${top},toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes`
-            );
-
-            if (!popup) {
-                console.error('[Embedder] Failed to open popup');
-                this.updateEmbedderStatus('Failed to open popup. Please allow popups.', 'error');
-                return;
+            // Check expiry
+            if (typeof payload.exp === 'number' && (payload.exp * 1000) < Date.now()) {
+                console.log('[Embedder] Token expired');
+                return false;
             }
 
-            // STEP 3: Poll for device token
-            await this.pollForDeviceToken(userCode, expiresIn, popup);
+            // Check issuer
+            if (typeof payload.iss === 'string' && !payload.iss.includes('securetoken.google.com')) {
+                console.warn('[Embedder] Invalid token issuer:', payload.iss);
+                return false;
+            }
 
+            return true;
         } catch (error) {
-            console.error('[Embedder] Authentication start error:', error);
-            this.updateEmbedderStatus(`Authentication failed: ${error.message}`, 'error');
+            console.error('[Embedder] Token validation error:', error);
+            return false;
         }
     }
 
-    async pollForDeviceToken(userCode, expiresIn, popup) {
-        const pollInterval = 3000; // 3 seconds (same as CLI)
-        const expiresAt = Date.now() + (expiresIn * 1000);
+    startBrowserAuth() {
+        // Browser-based OAuth callback flow via PHP backend
+        // PHP handles token exchange and session management
 
-        console.log('[Embedder] Starting to poll for device token...');
-        console.log('[Embedder] User Code:', userCode);
-        console.log('[Embedder] Expires in:', expiresIn, 'seconds');
+        const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+        const callbackUrl = baseUrl + this.embedderConfig.phpAuthUrl + '?action=callback';
 
-        this.updateEmbedderStatus(`Waiting for activation... (Code: ${userCode})`, 'info');
+        // Build Embedder auth URL
+        const authUrl = new URL(this.embedderConfig.authUrl);
+        authUrl.searchParams.set('callback', callbackUrl);
+        authUrl.searchParams.set('source', 'webscreen-ide');
+
+        console.log('[Embedder] Starting browser OAuth flow...');
+        console.log('[Embedder] Callback URL:', callbackUrl);
+        console.log('[Embedder] Auth URL:', authUrl.toString());
+
+        this.updateEmbedderStatus('Redirecting to Embedder...', 'info');
+
+        // Redirect to Embedder auth page
+        // Embedder will redirect to PHP callback which handles token exchange
+        window.location.href = authUrl.toString();
+    }
+
+    async startDeviceCodeAuth() {
+        // Device code flow via PHP backend (no CORS issues!)
+        console.log('[Embedder] Starting device code flow...');
+        this.updateEmbedderStatus('Starting device code authentication...', 'info');
+
+        try {
+            // Step 1: Request device code from PHP backend
+            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=start_device_code`);
+
+            if (!response.ok) {
+                throw new Error(`Failed to start device auth: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to start device code flow');
+            }
+
+            this.deviceCodeData = result.data;
+            const { userCode, deviceCode, expiresIn, verificationUri } = result.data;
+
+            console.log('[Embedder] Device code received:', { userCode, verificationUri });
+
+            // Show device code UI
+            this.showDeviceCodeUI(userCode, verificationUri);
+
+            // Step 2: Start polling for authorization
+            const expiresAt = Date.now() + (expiresIn * 1000);
+            this.startDeviceCodePolling(userCode, expiresAt);
+
+        } catch (error) {
+            console.error('[Embedder] Device code auth error:', error);
+            this.updateEmbedderStatus(`Device code auth failed: ${error.message}`, 'error');
+        }
+    }
+
+    showDeviceCodeUI(userCode, verificationUri) {
+        // Hide auth method selection
+        document.getElementById('authMethodSelection').classList.add('hidden');
+
+        // Show device code display
+        const deviceCodeDisplay = document.getElementById('deviceCodeDisplay');
+        deviceCodeDisplay.classList.remove('hidden');
+
+        // Set the code and URL
+        document.getElementById('deviceCodeValue').textContent = userCode;
+        document.getElementById('verificationUrl').textContent = verificationUri;
+        document.getElementById('verificationUrl').href = verificationUri;
+
+        // Open verification URL in new tab
+        window.open(verificationUri, '_blank');
+
+        this.updateEmbedderStatus('Enter the code shown above at the verification URL', 'info');
+    }
+
+    startDeviceCodePolling(userCode, expiresAt) {
+        const POLL_INTERVAL = 3000; // 3 seconds, same as CLI
 
         const poll = async () => {
-            // Check if expired
-            if (Date.now() > expiresAt) {
-                console.error('[Embedder] Device code expired');
-                this.updateEmbedderStatus('Code expired. Please try again.', 'error');
-                if (popup && !popup.closed) {
-                    popup.close();
-                }
-                return;
-            }
-
-            // Check if popup was closed by user
-            if (popup && popup.closed) {
-                console.log('[Embedder] Popup was closed by user');
-                this.updateEmbedderStatus('Authentication cancelled', 'info');
-                return;
-            }
-
             try {
-                // Poll the device/token endpoint
-                const response = await fetch(`${this.embedderConfig.backendUrl}/api/v1/auth/device/token`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        code: userCode
-                    })
-                });
-
-                if (!response.ok) {
-                    console.warn('[Embedder] Poll failed:', response.status);
-                    // Continue polling even on error
-                    setTimeout(poll, pollInterval);
+                // Check if expired
+                if (Date.now() > expiresAt) {
+                    console.log('[Embedder] Device code expired, restarting...');
+                    this.cancelDeviceCodeAuth();
+                    this.updateEmbedderStatus('Device code expired. Please try again.', 'error');
                     return;
                 }
 
-                const data = await response.json();
-                console.log('[Embedder] Poll response:', data);
+                // Update status
+                document.getElementById('deviceCodeStatus').textContent = 'Waiting for activation...';
+
+                // Poll for token via PHP backend
+                const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=poll_device_code`);
+
+                if (!response.ok) {
+                    throw new Error(`Polling failed: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Polling failed');
+                }
+
+                const data = result.data;
+                console.log('[Embedder] Poll response:', data.status);
 
                 if (data.accessToken && data.status === 'authorized') {
-                    // SUCCESS! Got the token
-                    console.log('[Embedder] Device authorized! Received access token');
-                    this.updateEmbedderStatus('Device activated! Exchanging token...', 'success');
+                    // Success! PHP backend has already exchanged the token
+                    console.log('[Embedder] Device authorized!');
+                    this.cancelDeviceCodeAuth(); // Stop polling
+                    this.updateEmbedderStatus('Device authorized! Loading credentials...', 'success');
 
-                    // Close popup
-                    if (popup && !popup.closed) {
-                        popup.close();
-                    }
-
-                    // Exchange custom token with Firebase
-                    await this.handleEmbedderAuthSuccess(data.accessToken);
+                    // Load credentials from PHP session
+                    await this.loadEmbedderCredentials();
+                    this.updateEmbedderUI();
 
                 } else if (data.status === 'authorization_pending') {
-                    // Still waiting for user to authorize
-                    console.log('[Embedder] Authorization pending, will retry...');
-                    setTimeout(poll, pollInterval);
+                    // Keep polling
+                    this.deviceCodePolling = setTimeout(poll, POLL_INTERVAL);
 
                 } else if (data.status === 'code_not_found') {
-                    // Code expired or invalid
-                    console.error('[Embedder] Code not found');
-                    this.updateEmbedderStatus('Code expired or invalid. Please try again.', 'error');
-                    if (popup && !popup.closed) {
-                        popup.close();
-                    }
+                    // Code not found, restart flow
+                    console.log('[Embedder] Code not found, restarting...');
+                    this.cancelDeviceCodeAuth();
+                    this.startDeviceCodeAuth();
 
                 } else {
                     // Unknown status
-                    console.error('[Embedder] Unknown status:', data.status);
-                    this.updateEmbedderStatus(`Authentication failed: ${data.status || 'Unknown error'}`, 'error');
-                    if (popup && !popup.closed) {
-                        popup.close();
-                    }
+                    throw new Error(data.status || 'Unknown error occurred');
                 }
 
             } catch (error) {
-                console.warn('[Embedder] Poll error (will retry):', error.message);
-                setTimeout(poll, pollInterval);
+                console.error('[Embedder] Polling error:', error);
+                this.cancelDeviceCodeAuth();
+                this.updateEmbedderStatus(`Polling failed: ${error.message}`, 'error');
             }
         };
 
         // Start polling
         poll();
+    }
+
+    cancelDeviceCodeAuth() {
+        // Stop polling
+        if (this.deviceCodePolling) {
+            clearTimeout(this.deviceCodePolling);
+            this.deviceCodePolling = null;
+        }
+
+        // Clear device code data
+        this.deviceCodeData = null;
+
+        // Hide device code display
+        document.getElementById('deviceCodeDisplay').classList.add('hidden');
+
+        // Show auth method selection again
+        document.getElementById('authMethodSelection').classList.remove('hidden');
+
+        console.log('[Embedder] Device code authentication cancelled');
     }
 
     async submitManualToken() {
@@ -809,87 +883,141 @@ create_label_with_text('Hello WebScreen!');
         }
 
         console.log('[Embedder] Manual token submitted');
-        input.value = '';  // Clear input after submission
-
-        // Process the token through the same handler as popup auth
-        await this.handleEmbedderAuthSuccess(token);
-    }
-
-    async embedderRefreshToken() {
-        const credentials = this.loadEmbedderCredentials();
-
-        if (!credentials || !credentials.refreshToken) {
-            this.updateEmbedderStatus('No refresh token available. Please login again.', 'error');
-            return;
-        }
-
-        this.updateEmbedderStatus('Refreshing token...', 'info');
+        this.updateEmbedderStatus('Processing token...', 'info');
 
         try {
-            const url = `${this.embedderConfig.tokenApiUrl}?key=${this.embedderConfig.apiKey}`;
-
-            const response = await fetch(url, {
+            // Exchange token via PHP backend
+            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=exchange_token`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
+                    'Content-Type': 'application/json'
                 },
-                body: new URLSearchParams({
-                    grant_type: 'refresh_token',
-                    refresh_token: credentials.refreshToken
-                })
+                body: JSON.stringify({ token })
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+                throw new Error(`Token exchange failed: ${response.status}`);
             }
 
-            const data = await response.json();
+            const result = await response.json();
 
-            const expiresIn = typeof data.expires_in === 'string'
-                ? parseInt(data.expires_in, 10)
-                : data.expires_in || 3600;
+            if (!result.success) {
+                throw new Error(result.error || 'Token exchange failed');
+            }
 
-            credentials.accessToken = data.id_token;
-            credentials.idToken = data.id_token;
-            credentials.refreshToken = data.refresh_token || credentials.refreshToken;
-            credentials.expiresAt = Date.now() + (expiresIn * 1000);
-            credentials.timestamp = Date.now();
+            input.value = '';  // Clear input after successful submission
+            this.updateEmbedderStatus('Authentication successful!', 'success');
 
-            this.saveEmbedderCredentials(credentials);
+            // Load credentials from PHP session
+            await this.loadEmbedderCredentials();
+            this.updateEmbedderUI();
+
+        } catch (error) {
+            console.error('[Embedder] Manual token error:', error);
+            this.updateEmbedderStatus(`Token exchange failed: ${error.message}`, 'error');
+        }
+    }
+
+    async embedderRefreshToken() {
+        this.updateEmbedderStatus('Refreshing token...', 'info');
+
+        try {
+            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=refresh_token`);
+
+            if (!response.ok) {
+                throw new Error(`Token refresh failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Token refresh failed');
+            }
+
             this.updateEmbedderStatus('Token refreshed successfully!', 'success');
+
+            // Load updated credentials from PHP session
+            await this.loadEmbedderCredentials();
             this.updateEmbedderUI();
 
         } catch (error) {
             this.updateEmbedderStatus(`Token refresh failed: ${error.message}`, 'error');
-            console.error('Token refresh error:', error);
+            console.error('[Embedder] Token refresh error:', error);
         }
     }
 
-    embedderLogout() {
-        localStorage.removeItem('embedder_credentials');
-        this.updateEmbedderStatus('Logged out successfully', 'info');
-        this.updateEmbedderUI();
+    async embedderLogout() {
+        // Cancel any ongoing device code polling
+        this.cancelDeviceCodeAuth();
+
+        try {
+            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=logout`);
+
+            if (!response.ok) {
+                throw new Error(`Logout failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Logout failed');
+            }
+
+            this.updateEmbedderStatus('Logged out successfully', 'info');
+
+            // Clear local credential cache
+            this.credentials = null;
+            this.updateEmbedderUI();
+
+        } catch (error) {
+            console.error('[Embedder] Logout error:', error);
+            this.updateEmbedderStatus('Logged out (with error)', 'info');
+            this.credentials = null;
+            this.updateEmbedderUI();
+        }
     }
 
-    saveEmbedderCredentials(credentials) {
-        localStorage.setItem('embedder_credentials', JSON.stringify(credentials));
-    }
+    async loadEmbedderCredentials() {
+        try {
+            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=get_credentials`);
 
-    loadEmbedderCredentials() {
-        const stored = localStorage.getItem('embedder_credentials');
-        return stored ? JSON.parse(stored) : null;
+            if (!response.ok) {
+                console.error('[Embedder] Failed to load credentials:', response.status);
+                this.credentials = null;
+                return null;
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                console.error('[Embedder] Error loading credentials:', result.error);
+                this.credentials = null;
+                return null;
+            }
+
+            if (result.authenticated && result.credentials) {
+                this.credentials = result.credentials;
+                return result.credentials;
+            }
+
+            this.credentials = null;
+            return null;
+
+        } catch (error) {
+            console.error('[Embedder] Error loading credentials:', error);
+            this.credentials = null;
+            return null;
+        }
     }
 
     updateEmbedderUI() {
-        const credentials = this.loadEmbedderCredentials();
+        const credentials = this.credentials;  // Use cached credentials
         const isAuthenticated = credentials && credentials.accessToken;
         const isExpired = credentials && Date.now() > credentials.expiresAt;
 
-        // Toggle buttons
-        document.getElementById('loginBtn').classList.toggle('hidden', isAuthenticated);
-        document.getElementById('logoutBtn').classList.toggle('hidden', !isAuthenticated);
-        document.getElementById('refreshTokenBtn').classList.toggle('hidden', !isAuthenticated);
+        // Toggle auth method selection vs authenticated actions
+        document.getElementById('authMethodSelection').classList.toggle('hidden', isAuthenticated);
+        document.getElementById('authenticatedActions').classList.toggle('hidden', !isAuthenticated);
 
         // Toggle sections
         document.getElementById('userSection').classList.toggle('hidden', !isAuthenticated);
