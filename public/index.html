@@ -57,6 +57,7 @@
                     <div class="tabs">
                         <button class="tab" data-tab="console">Serial Console</button>
                         <button class="tab active" data-tab="editor">JavaScript Editor</button>
+                        <button class="tab" data-tab="embedder">Embedder</button>
                         <button class="tab" data-tab="files">File Manager</button>
                     </div>
                     <div class="editor-actions">
@@ -94,7 +95,118 @@
                 <div class="tab-content" id="editor-tab">
                     <div id="codeEditor"></div>
                 </div>
-                
+
+                <!-- Embedder Tab -->
+                <div class="tab-content hidden" id="embedder-tab">
+                    <div class="embedder-main-layout">
+                        <!-- Chat Area -->
+                        <div class="embedder-chat-container">
+                            <div class="embedder-header">
+                                <h3>Embedder AI Assistant</h3>
+                                <div class="embedder-status-inline">
+                                    <span id="embedderStatusIndicator" class="status-dot disconnected"></span>
+                                    <span id="embedderStatusText">Not authenticated</span>
+                                </div>
+                            </div>
+
+                            <!-- Auth Status Messages -->
+                            <div id="authStatus" class="status-info" style="display: none;"></div>
+
+                            <!-- Conversation Display -->
+                            <div id="embedderConversation" class="embedder-conversation">
+                                <div class="embedder-welcome">
+                                    <h4>Welcome to Embedder</h4>
+                                    <p>Please login to start chatting with the AI assistant.</p>
+                                    <p>You can ask questions about your code, request improvements, or get help with debugging.</p>
+                                </div>
+                            </div>
+
+                            <!-- Input Area -->
+                            <div class="embedder-input-container">
+                                <div class="embedder-input-actions">
+                                    <button id="sendCodeToEmbedder" class="btn btn-sm" title="Include current editor code" disabled>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="16 18 22 12 16 6"></polyline>
+                                            <polyline points="8 6 2 12 8 18"></polyline>
+                                        </svg>
+                                        Include Code
+                                    </button>
+                                    <button id="clearEmbedderChat" class="btn btn-sm" title="Clear conversation">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                                        </svg>
+                                        Clear
+                                    </button>
+                                </div>
+                                <div class="embedder-input-wrapper">
+                                    <textarea id="embedderInput" class="embedder-textarea" placeholder="Ask Embedder anything about your code..." rows="3" disabled></textarea>
+                                    <button id="sendEmbedderMessage" class="btn btn-primary embedder-send-btn" disabled>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                        </svg>
+                                        Send
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar with Auth & Settings -->
+                        <div class="embedder-sidebar">
+                            <!-- Authentication -->
+                            <div class="embedder-section compact">
+                                <h4>Authentication</h4>
+                                <div class="button-group">
+                                    <button id="loginBtn" class="btn btn-primary btn-sm">Login</button>
+                                    <button id="logoutBtn" class="btn btn-danger btn-sm hidden">Logout</button>
+                                    <button id="refreshTokenBtn" class="btn btn-sm hidden">Refresh</button>
+                                </div>
+                            </div>
+
+                            <!-- User Info -->
+                            <div id="userSection" class="embedder-section compact hidden">
+                                <h4>User</h4>
+                                <div class="info-box-compact">
+                                    <pre id="userInfo"></pre>
+                                </div>
+                            </div>
+
+                            <!-- Settings -->
+                            <div class="embedder-section compact">
+                                <h4>Settings</h4>
+                                <div class="embedder-setting">
+                                    <label for="embedderModel">Model:</label>
+                                    <select id="embedderModel" class="input-field">
+                                        <option value="claude-4-5-sonnet" selected>Claude 4.5 Sonnet</option>
+                                        <option value="claude-4-sonnet">Claude 4 Sonnet</option>
+                                        <option value="claude-4-5-haiku">Claude 4.5 Haiku</option>
+                                        <option value="gpt-5">GPT-5</option>
+                                    </select>
+                                </div>
+                                <div class="embedder-setting">
+                                    <label for="embedderTemp">Temperature:</label>
+                                    <input type="range" id="embedderTemp" min="0" max="1" step="0.1" value="0.7" class="slider">
+                                    <span id="embedderTempValue">0.7</span>
+                                </div>
+                            </div>
+
+                            <!-- Quick Actions -->
+                            <div class="embedder-section compact">
+                                <h4>Quick Actions</h4>
+                                <div class="embedder-quick-actions">
+                                    <button class="embedder-quick-btn" data-prompt="Explain this code">Explain Code</button>
+                                    <button class="embedder-quick-btn" data-prompt="Find bugs in this code">Find Bugs</button>
+                                    <button class="embedder-quick-btn" data-prompt="Improve this code">Improve</button>
+                                    <button class="embedder-quick-btn" data-prompt="Add comments to this code">Add Comments</button>
+                                    <button class="embedder-quick-btn" data-prompt="Convert to TypeScript">To TypeScript</button>
+                                    <button class="embedder-quick-btn" data-prompt="Optimize performance">Optimize</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- File Manager Tab -->
                 <div class="tab-content hidden" id="files-tab">
                     <div class="file-manager">

@@ -6,7 +6,22 @@ class WebScreenIDE {
         this.fileList = [];
         this.isMonitoring = false;
         this.currentTheme = 'retro';
-        
+
+        // Embedder configuration
+        this.embedderConfig = {
+            authUrl: 'https://app.embedder.dev/',
+            tokenApiUrl: 'https://securetoken.googleapis.com/v1/token',
+            apiKey: 'AIzaSyDuNXvHd-GvTrmXG6_2TnrfqRWo-ApPd3s',
+            projectId: 'embedder-dev',
+            chatApiUrl: 'https://api.embedder.dev/v1/chat'
+        };
+
+        this.embedderConversation = [];
+        this.embedderSettings = {
+            model: 'claude-4-5-sonnet',
+            temperature: 0.7
+        };
+
         this.init();
     }
 
@@ -15,6 +30,7 @@ class WebScreenIDE {
         this.initEditor();
         this.setupEventListeners();
         this.setupSerialEvents();
+        this.initEmbedder();
         this.updateUI();
     }
 
@@ -141,6 +157,57 @@ create_label_with_text('Hello WebScreen!');
         // Filename input
         document.getElementById('filename').addEventListener('input', (e) => {
             this.currentFile = e.target.value;
+        });
+
+        // Embedder buttons
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            this.startEmbedderAuth();
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            this.embedderLogout();
+        });
+
+        document.getElementById('refreshTokenBtn').addEventListener('click', () => {
+            this.embedderRefreshToken();
+        });
+
+        // Embedder chat
+        document.getElementById('sendEmbedderMessage').addEventListener('click', () => {
+            this.sendEmbedderMessage();
+        });
+
+        document.getElementById('embedderInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendEmbedderMessage();
+            }
+        });
+
+        document.getElementById('sendCodeToEmbedder').addEventListener('click', () => {
+            this.includeCodeInEmbedder();
+        });
+
+        document.getElementById('clearEmbedderChat').addEventListener('click', () => {
+            this.clearEmbedderConversation();
+        });
+
+        // Embedder settings
+        document.getElementById('embedderModel').addEventListener('change', (e) => {
+            this.embedderSettings.model = e.target.value;
+        });
+
+        document.getElementById('embedderTemp').addEventListener('input', (e) => {
+            this.embedderSettings.temperature = parseFloat(e.target.value);
+            document.getElementById('embedderTempValue').textContent = e.target.value;
+        });
+
+        // Embedder quick actions
+        document.querySelectorAll('.embedder-quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const prompt = btn.dataset.prompt;
+                this.embedderQuickAction(prompt);
+            });
         });
     }
 
@@ -465,6 +532,474 @@ create_label_with_text('Hello WebScreen!');
     toggleTheme() {
         const newTheme = this.currentTheme === 'retro' ? 'focus' : 'retro';
         this.setTheme(newTheme);
+    }
+
+    // Embedder Methods
+    initEmbedder() {
+        // Set callback URL
+        const callbackUrl = window.location.href.split('?')[0];
+        document.getElementById('callbackUrl').value = callbackUrl;
+
+        // Check if returning from auth
+        this.checkEmbedderAuthCallback();
+
+        // Load saved credentials
+        this.loadEmbedderCredentials();
+
+        // Update UI
+        this.updateEmbedderUI();
+
+        // Auto-refresh embedder UI every second
+        setInterval(() => {
+            const credentials = this.loadEmbedderCredentials();
+            if (credentials && credentials.accessToken) {
+                this.updateEmbedderUI();
+            }
+        }, 1000);
+    }
+
+    checkEmbedderAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const error = urlParams.get('error');
+
+        if (error) {
+            this.updateEmbedderStatus(`Authentication failed: ${error}`, 'error');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return;
+        }
+
+        if (token) {
+            this.handleEmbedderAuthSuccess(token);
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }
+
+    handleEmbedderAuthSuccess(token) {
+        try {
+            const payload = this.parseJWT(token);
+
+            const credentials = {
+                accessToken: token,
+                idToken: token,
+                expiresAt: payload.exp * 1000,
+                user: {
+                    uid: payload.uid || payload.user_id,
+                    email: payload.email || null,
+                    displayName: payload.name || null
+                },
+                timestamp: Date.now()
+            };
+
+            this.saveEmbedderCredentials(credentials);
+            this.updateEmbedderStatus('Authentication successful!', 'success');
+            this.updateEmbedderUI();
+
+        } catch (error) {
+            this.updateEmbedderStatus(`Error processing token: ${error.message}`, 'error');
+            console.error('Token processing error:', error);
+        }
+    }
+
+    parseJWT(token) {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+
+            return JSON.parse(jsonPayload);
+        } catch (error) {
+            throw new Error('Invalid JWT token');
+        }
+    }
+
+    startEmbedderAuth() {
+        const callbackUrl = window.location.href.split('?')[0];
+        const authUrl = new URL(this.embedderConfig.authUrl);
+        authUrl.searchParams.set('callback', callbackUrl);
+        authUrl.searchParams.set('source', 'webscreen-ide');
+
+        this.updateEmbedderStatus('Redirecting to Embedder authentication...', 'info');
+        window.location.href = authUrl.toString();
+    }
+
+    async embedderRefreshToken() {
+        const credentials = this.loadEmbedderCredentials();
+
+        if (!credentials || !credentials.refreshToken) {
+            this.updateEmbedderStatus('No refresh token available. Please login again.', 'error');
+            return;
+        }
+
+        this.updateEmbedderStatus('Refreshing token...', 'info');
+
+        try {
+            const url = `${this.embedderConfig.tokenApiUrl}?key=${this.embedderConfig.apiKey}`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    grant_type: 'refresh_token',
+                    refresh_token: credentials.refreshToken
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            const expiresIn = typeof data.expires_in === 'string'
+                ? parseInt(data.expires_in, 10)
+                : data.expires_in || 3600;
+
+            credentials.accessToken = data.id_token;
+            credentials.idToken = data.id_token;
+            credentials.refreshToken = data.refresh_token || credentials.refreshToken;
+            credentials.expiresAt = Date.now() + (expiresIn * 1000);
+            credentials.timestamp = Date.now();
+
+            this.saveEmbedderCredentials(credentials);
+            this.updateEmbedderStatus('Token refreshed successfully!', 'success');
+            this.updateEmbedderUI();
+
+        } catch (error) {
+            this.updateEmbedderStatus(`Token refresh failed: ${error.message}`, 'error');
+            console.error('Token refresh error:', error);
+        }
+    }
+
+    embedderLogout() {
+        localStorage.removeItem('embedder_credentials');
+        this.updateEmbedderStatus('Logged out successfully', 'info');
+        this.updateEmbedderUI();
+    }
+
+    saveEmbedderCredentials(credentials) {
+        localStorage.setItem('embedder_credentials', JSON.stringify(credentials));
+    }
+
+    loadEmbedderCredentials() {
+        const stored = localStorage.getItem('embedder_credentials');
+        return stored ? JSON.parse(stored) : null;
+    }
+
+    updateEmbedderUI() {
+        const credentials = this.loadEmbedderCredentials();
+        const isAuthenticated = credentials && credentials.accessToken;
+        const isExpired = credentials && Date.now() > credentials.expiresAt;
+
+        // Toggle buttons
+        document.getElementById('loginBtn').classList.toggle('hidden', isAuthenticated);
+        document.getElementById('logoutBtn').classList.toggle('hidden', !isAuthenticated);
+        document.getElementById('refreshTokenBtn').classList.toggle('hidden', !isAuthenticated);
+
+        // Toggle sections
+        document.getElementById('userSection').classList.toggle('hidden', !isAuthenticated);
+
+        // Enable/disable chat controls
+        const chatEnabled = isAuthenticated && !isExpired;
+        document.getElementById('embedderInput').disabled = !chatEnabled;
+        document.getElementById('sendEmbedderMessage').disabled = !chatEnabled;
+        document.getElementById('sendCodeToEmbedder').disabled = !chatEnabled;
+        document.getElementById('clearEmbedderChat').disabled = !chatEnabled;
+
+        // Enable/disable quick action buttons
+        document.querySelectorAll('.embedder-quick-btn').forEach(btn => {
+            btn.disabled = !chatEnabled;
+        });
+
+        // Update status indicator
+        const statusDot = document.getElementById('embedderStatusIndicator');
+        const statusText = document.getElementById('embedderStatusText');
+
+        if (isAuthenticated) {
+            // Display user info
+            const userInfo = {
+                email: credentials.user?.email,
+                uid: credentials.user?.uid?.substring(0, 8) + '...'
+            };
+            document.getElementById('userInfo').textContent = JSON.stringify(userInfo, null, 2);
+
+            // Update status
+            if (isExpired) {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = 'Token expired';
+                this.updateEmbedderStatus('Token expired. Please refresh or login again.', 'error');
+            } else {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = 'Connected';
+                this.updateEmbedderStatus('Authenticated', 'success');
+            }
+        } else {
+            statusDot.className = 'status-dot disconnected';
+            statusText.textContent = 'Not authenticated';
+            this.updateEmbedderStatus('Not authenticated', 'info');
+        }
+    }
+
+    formatTimeRemaining(expiresAt) {
+        const now = Date.now();
+        const remaining = expiresAt - now;
+
+        if (remaining < 0) {
+            return 'Expired';
+        }
+
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+
+        if (minutes > 60) {
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${hours}h ${mins}m`;
+        }
+
+        return `${minutes}m ${seconds}s`;
+    }
+
+    updateEmbedderStatus(message, type = 'info') {
+        const statusEl = document.getElementById('authStatus');
+        if (statusEl) {
+            statusEl.textContent = message;
+            statusEl.className = `status-${type}`;
+            statusEl.style.display = 'block';
+
+            // Auto-hide success/info messages after 3 seconds
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
+            }
+        }
+    }
+
+    // Embedder Chat Methods
+    async sendEmbedderMessage() {
+        const input = document.getElementById('embedderInput');
+        const message = input.value.trim();
+
+        if (!message) return;
+
+        const credentials = this.loadEmbedderCredentials();
+        if (!credentials || !credentials.accessToken) {
+            alert('Please login with Embedder first');
+            return;
+        }
+
+        // Add user message to conversation
+        this.embedderConversation.push({
+            role: 'user',
+            content: message
+        });
+
+        this.renderEmbedderConversation();
+        input.value = '';
+
+        // Show typing indicator
+        this.showEmbedderTyping();
+
+        try {
+            const response = await this.callEmbedderAPI(this.embedderConversation, credentials.accessToken);
+
+            // Remove typing indicator
+            this.hideEmbedderTyping();
+
+            if (response && response.message) {
+                // Add assistant response to conversation
+                this.embedderConversation.push({
+                    role: 'assistant',
+                    content: response.message
+                });
+
+                this.renderEmbedderConversation();
+            }
+        } catch (error) {
+            this.hideEmbedderTyping();
+            console.error('Embedder API error:', error);
+
+            // Add error message to conversation
+            this.embedderConversation.push({
+                role: 'assistant',
+                content: `Error: ${error.message}`
+            });
+            this.renderEmbedderConversation();
+        }
+    }
+
+    async callEmbedderAPI(messages, token) {
+        const response = await fetch(this.embedderConfig.chatApiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                messages: messages,
+                model: this.embedderSettings.model,
+                temperature: this.embedderSettings.temperature
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`);
+        }
+
+        return await response.json();
+    }
+
+    renderEmbedderConversation() {
+        const conversationEl = document.getElementById('embedderConversation');
+
+        // Clear welcome message if there are messages
+        if (this.embedderConversation.length > 0) {
+            conversationEl.innerHTML = '';
+        }
+
+        // Render all messages
+        this.embedderConversation.forEach((msg, index) => {
+            const messageEl = document.createElement('div');
+            messageEl.className = `embedder-message ${msg.role}`;
+
+            const headerEl = document.createElement('div');
+            headerEl.className = 'embedder-message-header';
+            headerEl.textContent = msg.role === 'user' ? 'You' : 'Embedder';
+
+            const contentEl = document.createElement('div');
+            contentEl.className = 'embedder-message-content';
+
+            // Format content (handle code blocks)
+            contentEl.innerHTML = this.formatEmbedderMessage(msg.content);
+
+            messageEl.appendChild(headerEl);
+            messageEl.appendChild(contentEl);
+
+            // Add action buttons for assistant messages with code
+            if (msg.role === 'assistant' && msg.content.includes('```')) {
+                const actionsEl = document.createElement('div');
+                actionsEl.className = 'embedder-message-actions';
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn btn-sm';
+                copyBtn.textContent = 'Copy Code';
+                copyBtn.onclick = () => this.copyEmbedderCode(msg.content);
+
+                const insertBtn = document.createElement('button');
+                insertBtn.className = 'btn btn-sm btn-primary';
+                insertBtn.textContent = 'Insert to Editor';
+                insertBtn.onclick = () => this.insertEmbedderCodeToEditor(msg.content);
+
+                actionsEl.appendChild(copyBtn);
+                actionsEl.appendChild(insertBtn);
+                messageEl.appendChild(actionsEl);
+            }
+
+            conversationEl.appendChild(messageEl);
+        });
+
+        // Auto-scroll to bottom
+        conversationEl.scrollTop = conversationEl.scrollHeight;
+    }
+
+    formatEmbedderMessage(content) {
+        // Simple markdown-like formatting for code blocks
+        return content
+            .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>');
+    }
+
+    copyEmbedderCode(content) {
+        // Extract code from markdown code blocks
+        const codeMatch = content.match(/```[\w+]?\n([\s\S]*?)```/);
+        if (codeMatch) {
+            navigator.clipboard.writeText(codeMatch[1].trim());
+            this.appendToTerminal('Code copied to clipboard', 'log-success');
+        }
+    }
+
+    insertEmbedderCodeToEditor(content) {
+        // Extract code from markdown code blocks
+        const codeMatch = content.match(/```[\w+]?\n([\s\S]*?)```/);
+        if (codeMatch) {
+            this.codeEditor.setValue(codeMatch[1].trim());
+            this.switchTab('editor');
+            this.appendToTerminal('Code inserted into editor', 'log-success');
+        }
+    }
+
+    includeCodeInEmbedder() {
+        const code = this.codeEditor.getValue();
+        const input = document.getElementById('embedderInput');
+
+        if (code.trim()) {
+            input.value = `Here's my code:\n\`\`\`javascript\n${code}\n\`\`\`\n\n${input.value}`;
+            input.focus();
+        }
+    }
+
+    embedderQuickAction(prompt) {
+        const credentials = this.loadEmbedderCredentials();
+        if (!credentials || !credentials.accessToken) {
+            alert('Please login with Embedder first');
+            return;
+        }
+
+        const code = this.codeEditor.getValue();
+        const input = document.getElementById('embedderInput');
+
+        if (code.trim()) {
+            input.value = `${prompt}:\n\`\`\`javascript\n${code}\n\`\`\``;
+        } else {
+            input.value = prompt;
+        }
+
+        // Auto-send the message
+        this.sendEmbedderMessage();
+    }
+
+    clearEmbedderConversation() {
+        if (confirm('Are you sure you want to clear the conversation?')) {
+            this.embedderConversation = [];
+            const conversationEl = document.getElementById('embedderConversation');
+            conversationEl.innerHTML = `
+                <div class="embedder-welcome">
+                    <h4>Welcome to Embedder</h4>
+                    <p>Conversation cleared. Start a new chat!</p>
+                </div>
+            `;
+        }
+    }
+
+    showEmbedderTyping() {
+        const conversationEl = document.getElementById('embedderConversation');
+        const typingEl = document.createElement('div');
+        typingEl.id = 'embedder-typing';
+        typingEl.className = 'embedder-message assistant';
+        typingEl.innerHTML = `
+            <div class="embedder-message-header">Embedder</div>
+            <div class="embedder-typing-indicator">
+                <div class="embedder-typing-dot"></div>
+                <div class="embedder-typing-dot"></div>
+                <div class="embedder-typing-dot"></div>
+            </div>
+        `;
+        conversationEl.appendChild(typingEl);
+        conversationEl.scrollTop = conversationEl.scrollHeight;
+    }
+
+    hideEmbedderTyping() {
+        const typingEl = document.getElementById('embedder-typing');
+        if (typingEl) {
+            typingEl.remove();
+        }
     }
 }
 
