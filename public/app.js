@@ -548,14 +548,31 @@ create_label_with_text('Hello WebScreen!');
         console.log('[Embedder] Initializing...');
 
         // Display callback URL for debugging
-        const callbackUrl = window.location.href.split('?')[0];
+        const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+        const callbackUrl = baseUrl + 'callback.html';
         const callbackDisplay = document.getElementById('callbackUrlDisplay');
         if (callbackDisplay) {
             callbackDisplay.textContent = callbackUrl;
         }
 
-        // Check if returning from auth
-        this.checkEmbedderAuthCallback();
+        // Set up postMessage listener for popup authentication
+        window.addEventListener('message', (event) => {
+            // Security: verify the message is from our own origin
+            if (event.origin !== window.location.origin) {
+                console.warn('[Embedder] Received message from different origin:', event.origin);
+                return;
+            }
+
+            console.log('[Embedder] Received postMessage:', event.data);
+
+            if (event.data.type === 'embedder-auth-success' && event.data.token) {
+                console.log('[Embedder] Authentication successful via popup');
+                this.handleEmbedderAuthSuccess(event.data.token);
+            } else if (event.data.type === 'embedder-auth-error') {
+                console.error('[Embedder] Authentication error via popup:', event.data.error);
+                this.updateEmbedderStatus(`Authentication failed: ${event.data.error}`, 'error');
+            }
+        });
 
         // Load saved credentials
         this.loadEmbedderCredentials();
@@ -572,43 +589,13 @@ create_label_with_text('Hello WebScreen!');
         }, 1000);
     }
 
-    async checkEmbedderAuthCallback() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
-        const error = urlParams.get('error');
 
-        console.log('[Embedder] Checking auth callback...', { token: !!token, error });
-
-        if (error) {
-            console.error('[Embedder] Authentication failed:', error);
-            // Switch to Embedder tab to show error
-            this.switchTab('embedder');
-            this.updateEmbedderStatus(`Authentication failed: ${error}`, 'error');
-            // Clean URL after a delay to ensure message is visible
-            setTimeout(() => {
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }, 100);
-            return;
-        }
-
-        if (token) {
-            console.log('[Embedder] Custom token received, processing...');
+    async handleEmbedderAuthSuccess(customToken) {
+        try {
             // Switch to Embedder tab to show progress
             this.switchTab('embedder');
             this.updateEmbedderStatus('Exchanging token...', 'info');
 
-            // Exchange custom token for Firebase ID token
-            await this.handleEmbedderAuthSuccess(token);
-
-            // Clean URL after processing completes
-            setTimeout(() => {
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }, 1000);
-        }
-    }
-
-    async handleEmbedderAuthSuccess(customToken) {
-        try {
             console.log('[Embedder] Received custom token from Embedder');
             console.log('[Embedder] Exchanging custom token for Firebase ID token...');
 
@@ -652,12 +639,13 @@ create_label_with_text('Hello WebScreen!');
 
             console.log('[Embedder] Saving credentials...');
             this.saveEmbedderCredentials(credentials);
-            this.updateEmbedderStatus('Authentication successful!', 'success');
+            this.updateEmbedderStatus('Authentication successful! You can now chat with Embedder.', 'success');
             this.updateEmbedderUI();
             console.log('[Embedder] Authentication complete!');
 
         } catch (error) {
             console.error('[Embedder] Authentication error:', error);
+            this.switchTab('embedder');
             this.updateEmbedderStatus(`Authentication failed: ${error.message}`, 'error');
         }
     }
@@ -677,20 +665,54 @@ create_label_with_text('Hello WebScreen!');
     }
 
     startEmbedderAuth() {
-        const callbackUrl = window.location.href.split('?')[0];
+        // Build callback URL pointing to callback.html
+        const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+        const callbackUrl = baseUrl + 'callback.html';
+
+        // Build Embedder auth URL
         const authUrl = new URL(this.embedderConfig.authUrl);
         authUrl.searchParams.set('callback', callbackUrl);
         authUrl.searchParams.set('source', 'webscreen-ide');
 
-        console.log('[Embedder] Starting authentication...');
+        console.log('[Embedder] Starting popup authentication...');
         console.log('[Embedder] Callback URL:', callbackUrl);
         console.log('[Embedder] Auth URL:', authUrl.toString());
 
-        this.updateEmbedderStatus('Redirecting to Embedder authentication...', 'info');
+        this.updateEmbedderStatus('Opening authentication popup...', 'info');
 
-        setTimeout(() => {
-            window.location.href = authUrl.toString();
-        }, 500);
+        // Open popup window
+        const width = 500;
+        const height = 700;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+
+        const popup = window.open(
+            authUrl.toString(),
+            'embedder-auth',
+            `width=${width},height=${height},left=${left},top=${top},toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes`
+        );
+
+        if (popup) {
+            console.log('[Embedder] Popup opened successfully');
+            this.updateEmbedderStatus('Please complete authentication in the popup window...', 'info');
+
+            // Monitor popup to detect if user closes it
+            const popupMonitor = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(popupMonitor);
+                    console.log('[Embedder] Popup was closed');
+
+                    // Check if we got credentials (authentication might have succeeded)
+                    const credentials = this.loadEmbedderCredentials();
+                    if (!credentials || !credentials.accessToken) {
+                        this.updateEmbedderStatus('Authentication cancelled', 'info');
+                    }
+                }
+            }, 500);
+        } else {
+            console.error('[Embedder] Failed to open popup - might be blocked');
+            this.updateEmbedderStatus('Failed to open popup. Please allow popups for this site.', 'error');
+        }
     }
 
     async embedderRefreshToken() {
