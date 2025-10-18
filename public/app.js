@@ -572,7 +572,7 @@ create_label_with_text('Hello WebScreen!');
         }, 1000);
     }
 
-    checkEmbedderAuthCallback() {
+    async checkEmbedderAuthCallback() {
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
         const error = urlParams.get('error');
@@ -592,31 +592,60 @@ create_label_with_text('Hello WebScreen!');
         }
 
         if (token) {
-            console.log('[Embedder] Token received, processing...');
-            // Switch to Embedder tab to show success
+            console.log('[Embedder] Custom token received, processing...');
+            // Switch to Embedder tab to show progress
             this.switchTab('embedder');
-            this.handleEmbedderAuthSuccess(token);
-            // Clean URL after a delay
+            this.updateEmbedderStatus('Exchanging token...', 'info');
+
+            // Exchange custom token for Firebase ID token
+            await this.handleEmbedderAuthSuccess(token);
+
+            // Clean URL after processing completes
             setTimeout(() => {
                 window.history.replaceState({}, document.title, window.location.pathname);
-            }, 100);
+            }, 1000);
         }
     }
 
-    handleEmbedderAuthSuccess(token) {
+    async handleEmbedderAuthSuccess(customToken) {
         try {
-            console.log('[Embedder] Parsing JWT token...');
-            const payload = this.parseJWT(token);
-            console.log('[Embedder] JWT payload:', payload);
+            console.log('[Embedder] Received custom token from Embedder');
+            console.log('[Embedder] Exchanging custom token for Firebase ID token...');
+
+            // Exchange custom token for Firebase ID token
+            // This is what the CLI does: wD(SD, r) = signInWithCustomToken(firebaseAuth, customToken)
+            const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${this.embedderConfig.apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    token: customToken,
+                    returnSecureToken: true
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || `Authentication failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('[Embedder] Successfully obtained Firebase ID token');
+
+            // Calculate expiration time
+            const expiresIn = parseInt(data.expiresIn, 10);
+            const expiresAt = Date.now() + (expiresIn * 1000);
 
             const credentials = {
-                accessToken: token,
-                idToken: token,
-                expiresAt: payload.exp * 1000,
+                accessToken: data.idToken,
+                idToken: data.idToken,
+                refreshToken: data.refreshToken,
+                expiresAt: expiresAt,
                 user: {
-                    uid: payload.uid || payload.user_id,
-                    email: payload.email || null,
-                    displayName: payload.name || null
+                    uid: data.localId,
+                    email: data.email || null,
+                    displayName: data.displayName || null
                 },
                 timestamp: Date.now()
             };
@@ -628,8 +657,8 @@ create_label_with_text('Hello WebScreen!');
             console.log('[Embedder] Authentication complete!');
 
         } catch (error) {
-            console.error('[Embedder] Token processing error:', error);
-            this.updateEmbedderStatus(`Error processing token: ${error.message}`, 'error');
+            console.error('[Embedder] Authentication error:', error);
+            this.updateEmbedderStatus(`Authentication failed: ${error.message}`, 'error');
         }
     }
 
