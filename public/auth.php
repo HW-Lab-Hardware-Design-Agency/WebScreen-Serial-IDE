@@ -593,8 +593,14 @@ function proxyAPI() {
             'x-project-type: web',
             'x-project-id: ',
             'x-has-git: false',
-            'x-context-timestamp: ' . time()
+            'x-context-timestamp: ' . time(),
+            'x-api-key: embedder-cli'
         ];
+
+        // Add Anthropic-specific headers for Claude models
+        if (strpos($model, 'claude-') === 0) {
+            $headers[] = 'anthropic-version: 2023-06-01';
+        }
 
         // Make request to Embedder backend
         $response = makeRequest(
