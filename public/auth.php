@@ -578,17 +578,20 @@ function proxyAPI() {
         }
 
         // Build headers matching Embedder CLI implementation
+        // x-platform-type must be one of: win32, linux, darwin
+        // x-folder-type must be one of: versioned, unversioned
         $headers = [
             'Authorization: Bearer ' . $credentials['accessToken'],
             'User-Agent: webscreen-serial-ide/1.0.0',
             'x-client-type: web',
             'x-session-id: ' . $_SESSION['embedder_session_uuid'],
             'x-agent-mode: act',
-            'x-platform-type: web',
+            'x-platform-type: linux',
             'x-sandbox-type: none',
-            'x-folder-type: non-versioned',
+            'x-folder-type: unversioned',
             'x-working-directory: /',
-            'x-project-type: unknown',
+            'x-project-type: web',
+            'x-project-id: ',
             'x-has-git: false',
             'x-context-timestamp: ' . time()
         ];
