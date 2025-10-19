@@ -581,40 +581,51 @@ function proxyAPI() {
         // x-platform-type must be one of: win32, linux, darwin
         // x-folder-type must be one of: versioned, unversioned
 
-        // Base headers (always present in CLI)
+        // Generate project ID if not exists
+        if (!isset($_SESSION['embedder_project_id'])) {
+            $_SESSION['embedder_project_id'] = sprintf(
+                '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff) | 0x4000,
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            );
+        }
+
+        // Base headers (always present in CLI) - MATCHING CLI EXACTLY
         $headers = [
             'x-platform-type: linux',
             'x-sandbox-type: none',
-            'x-folder-type: unversioned',
+            'x-folder-type: versioned',  // CLI uses 'versioned' not 'unversioned'
             'x-client-type: web',
         ];
 
         // Headers added in useEffect (conditional in CLI, always present for web)
         $headers[] = 'x-session-id: ' . $_SESSION['embedder_session_uuid'];
-        $headers[] = 'Authorization: Bearer ' . $credentials['accessToken'];
+        $headers[] = 'authorization: Bearer ' . $credentials['accessToken'];  // lowercase for HTTP/2
         $headers[] = 'x-agent-mode: act';
 
-        // Context headers - send them with web-appropriate values
-        // From CLI code analysis (line 31360-31365):
-        // e.environmentContext && ((n["x-working-directory"] = e.workingDirectory), ...)
-
-        // For web client, use minimal but valid context:
+        // Context headers - MATCH CLI VALUES
         $headers[] = 'x-working-directory: /';
-        $headers[] = 'x-project-type: generic';  // Options: npm, git, embedded, generic
-        $headers[] = 'x-has-git: false';
+        $headers[] = 'x-project-type: git';  // CLI uses 'git' for git repos
+        $headers[] = 'x-has-git: true';  // CLI uses 'true' for git repos
         $headers[] = 'x-context-timestamp: ' . (time() * 1000);  // Unix timestamp in milliseconds
 
-        // x-project-id - send with empty value (CLI uses projectId or empty string)
-        $headers[] = 'x-project-id: ';
+        // x-project-id - CLI sends actual UUID
+        $headers[] = 'x-project-id: ' . $_SESSION['embedder_project_id'];
 
         // These headers are added by the provider clients in CLI
         $headers[] = 'x-api-key: embedder-cli';
-        $headers[] = 'User-Agent: webscreen-serial-ide/1.0.0';
+        $headers[] = 'user-agent: ai-sdk/provider-utils/3.0.9 runtime/php/8';
 
         // Add Anthropic-specific headers for Claude models
         if (strpos($model, 'claude-') === 0) {
             $headers[] = 'anthropic-version: 2023-06-01';
         }
+
+        // Content-Type will be added by makeRequest() - force lowercase for HTTP/2
+        // Note: makeRequest adds 'Content-Type' but HTTP/2 normalizes to lowercase anyway
 
         // Debug: Log all headers being sent
         error_log('[Proxy] Sending headers: ' . json_encode($headers));
