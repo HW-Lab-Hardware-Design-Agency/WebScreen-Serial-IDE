@@ -602,6 +602,10 @@ function proxyAPI() {
             $headers[] = 'anthropic-version: 2023-06-01';
         }
 
+        // Debug: Log all headers being sent
+        error_log('[Proxy] Sending headers: ' . json_encode($headers));
+        error_log('[Proxy] Request body: ' . json_encode($requestBody));
+
         // Make request to Embedder backend
         $response = makeRequest(
             $proxyUrl . $endpoint,
@@ -612,8 +616,18 @@ function proxyAPI() {
 
         if ($response['status'] !== 200) {
             $errorMsg = 'API request failed: ' . $response['status'];
+
+            // Log full response for debugging
+            error_log('[Proxy] Error response status: ' . $response['status']);
+            error_log('[Proxy] Error response data: ' . json_encode($response['data']));
+            error_log('[Proxy] Error response raw: ' . $response['raw']);
+
             if (isset($response['data']['error'])) {
                 $errorMsg .= ' - ' . json_encode($response['data']['error']);
+            } else if (isset($response['data'])) {
+                $errorMsg .= ' - ' . json_encode($response['data']);
+            } else {
+                $errorMsg .= ' - ' . $response['raw'];
             }
             throw new Exception($errorMsg);
         }
@@ -690,6 +704,50 @@ try {
             echo json_encode(proxyAPI());
             break;
 
+        case 'debug_proxy_headers':
+            // Debug endpoint to see what headers would be sent
+            if (!isset($_SESSION['embedder_credentials'])) {
+                echo json_encode(['success' => false, 'error' => 'Not authenticated']);
+                break;
+            }
+
+            if (!isset($_SESSION['embedder_session_uuid'])) {
+                $_SESSION['embedder_session_uuid'] = sprintf(
+                    '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                    mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                    mt_rand(0, 0xffff),
+                    mt_rand(0, 0x0fff) | 0x4000,
+                    mt_rand(0, 0x3fff) | 0x8000,
+                    mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                );
+            }
+
+            $credentials = $_SESSION['embedder_credentials'];
+            $headers = [
+                'Authorization: Bearer ' . $credentials['accessToken'],
+                'User-Agent: webscreen-serial-ide/1.0.0',
+                'x-client-type: web',
+                'x-session-id: ' . $_SESSION['embedder_session_uuid'],
+                'x-agent-mode: act',
+                'x-platform-type: linux',
+                'x-sandbox-type: none',
+                'x-folder-type: unversioned',
+                'x-working-directory: /',
+                'x-project-type: web',
+                'x-project-id: ',
+                'x-has-git: false',
+                'x-context-timestamp: ' . time(),
+                'x-api-key: embedder-cli',
+                'anthropic-version: 2023-06-01'
+            ];
+
+            echo json_encode([
+                'success' => true,
+                'headers' => $headers,
+                'session_uuid' => $_SESSION['embedder_session_uuid']
+            ]);
+            break;
+
         default:
             http_response_code(400);
             echo json_encode([
@@ -703,7 +761,9 @@ try {
                     'get_credentials',
                     'logout',
                     'callback',
-                    'proxy_api'
+                    'proxy_api',
+                    'debug_session',
+                    'debug_proxy_headers'
                 ]
             ]);
     }
