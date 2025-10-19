@@ -816,20 +816,33 @@ create_label_with_text('Hello WebScreen!');
                 }
 
                 const data = result.data;
-                console.log('[Embedder] Poll response:', data.status);
+                console.log('[Embedder] Poll response:', JSON.stringify(data));
 
-                if (data.accessToken && data.status === 'authorized') {
-                    // Success! PHP backend has already exchanged the token
-                    console.log('[Embedder] Device authorized!');
+                if (data.status === 'authorized' && (data.accessToken || data.credentialsStored)) {
+                    // Success! PHP backend has exchanged the token
+                    console.log('[Embedder] Device authorized! Token exchanged by PHP backend.');
                     this.cancelDeviceCodeAuth(); // Stop polling
+
                     this.updateEmbedderStatus('Device authorized! Loading credentials...', 'success');
 
+                    // Wait a moment for session to be written
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
                     // Load credentials from PHP session
-                    await this.loadEmbedderCredentials();
-                    this.updateEmbedderUI();
+                    const credentials = await this.loadEmbedderCredentials();
+
+                    if (credentials && credentials.accessToken) {
+                        console.log('[Embedder] Credentials loaded successfully!');
+                        this.updateEmbedderStatus('Authentication complete!', 'success');
+                        this.updateEmbedderUI();
+                    } else {
+                        console.error('[Embedder] Failed to load credentials after authorization');
+                        this.updateEmbedderStatus('Authorization succeeded but failed to load credentials. Please refresh the page.', 'error');
+                    }
 
                 } else if (data.status === 'authorization_pending') {
                     // Keep polling
+                    console.log('[Embedder] Still waiting for user to authorize...');
                     this.deviceCodePolling = setTimeout(poll, POLL_INTERVAL);
 
                 } else if (data.status === 'code_not_found') {
@@ -840,6 +853,7 @@ create_label_with_text('Hello WebScreen!');
 
                 } else {
                     // Unknown status
+                    console.error('[Embedder] Unknown poll status:', data);
                     throw new Error(data.status || 'Unknown error occurred');
                 }
 

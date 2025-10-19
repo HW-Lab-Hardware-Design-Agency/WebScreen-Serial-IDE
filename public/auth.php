@@ -129,6 +129,8 @@ function validateToken($token) {
  */
 function startDeviceCode() {
     try {
+        error_log('[Auth] Starting device code authentication...');
+
         $response = makeRequest(
             EMBEDDER_CONFIG['backendUrl'] . '/api/v1/auth/device/start',
             'POST',
@@ -136,17 +138,21 @@ function startDeviceCode() {
         );
 
         if ($response['status'] !== 200) {
+            error_log('[Auth] Device code start failed: ' . $response['status']);
             throw new Exception('Failed to start device auth: ' . $response['status']);
         }
 
         // Store device code data in session
         $_SESSION['device_code_data'] = $response['data'];
 
+        error_log('[Auth] Device code started: ' . $response['data']['userCode']);
+
         return [
             'success' => true,
             'data' => $response['data']
         ];
     } catch (Exception $e) {
+        error_log('[Auth] Device code start error: ' . $e->getMessage());
         return [
             'success' => false,
             'error' => $e->getMessage()
@@ -175,11 +181,42 @@ function pollDeviceCode() {
             throw new Exception('Polling failed: ' . $response['status']);
         }
 
+        $data = $response['data'];
+
+        // If authorized, automatically exchange the token
+        if (isset($data['accessToken']) && $data['status'] === 'authorized') {
+            error_log('[Auth] Device authorized! Exchanging token...');
+
+            // Exchange the custom token for Firebase credentials
+            $exchangeResult = exchangeToken($data['accessToken']);
+
+            if (!$exchangeResult['success']) {
+                throw new Exception('Token exchange failed: ' . $exchangeResult['error']);
+            }
+
+            error_log('[Auth] Token exchanged successfully, credentials stored in session');
+
+            // Clear device code data
+            unset($_SESSION['device_code_data']);
+
+            // Return success with credentials indicator
+            return [
+                'success' => true,
+                'data' => [
+                    'status' => 'authorized',
+                    'accessToken' => true,  // Indicate token was exchanged
+                    'credentialsStored' => true
+                ]
+            ];
+        }
+
+        // Return the raw response for other statuses
         return [
             'success' => true,
-            'data' => $response['data']
+            'data' => $data
         ];
     } catch (Exception $e) {
+        error_log('[Auth] Poll error: ' . $e->getMessage());
         return [
             'success' => false,
             'error' => $e->getMessage()
@@ -417,6 +454,18 @@ try {
 
         case 'poll_device_code':
             echo json_encode(pollDeviceCode());
+            break;
+
+        case 'debug_session':
+            // Debug endpoint to check session state
+            echo json_encode([
+                'success' => true,
+                'session_id' => session_id(),
+                'has_credentials' => isset($_SESSION['embedder_credentials']),
+                'has_device_code' => isset($_SESSION['device_code_data']),
+                'device_code' => isset($_SESSION['device_code_data']) ? $_SESSION['device_code_data']['userCode'] : null,
+                'authenticated' => isset($_SESSION['embedder_credentials']) && validateToken($_SESSION['embedder_credentials']['accessToken'])
+            ]);
             break;
 
         case 'exchange_token':
