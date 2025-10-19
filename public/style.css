@@ -68,6 +68,10 @@
     --transition-smooth: all 0.2s ease;
 }
 
+.hidden {
+    display: none;
+}
+
 body {
     font-family: var(--font-family);
     background: var(--bg-primary);
@@ -2031,6 +2035,10 @@ body:not([data-theme="focus"]) {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
+}
+
+.button-group.hidden {
+    display: none;
 }
 
 .info-box {

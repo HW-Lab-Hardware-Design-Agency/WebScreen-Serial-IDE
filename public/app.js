@@ -177,32 +177,14 @@ create_label_with_text('Hello WebScreen!');
             this.currentFile = e.target.value;
         });
 
-        // Embedder authentication buttons
-        document.getElementById('loginBrowserBtn').addEventListener('click', () => {
-            this.startBrowserAuth();
-        });
-
         document.getElementById('loginDeviceCodeBtn').addEventListener('click', () => {
             this.startDeviceCodeAuth();
-        });
-
-        document.getElementById('cancelDeviceCode').addEventListener('click', () => {
-            this.cancelDeviceCodeAuth();
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             this.embedderLogout();
         });
 
-        document.getElementById('refreshTokenBtn').addEventListener('click', () => {
-            this.embedderRefreshToken();
-        });
-
-        document.getElementById('submitManualToken').addEventListener('click', () => {
-            this.submitManualToken();
-        });
-
-        // Embedder chat
         document.getElementById('sendEmbedderMessage').addEventListener('click', () => {
             this.sendEmbedderMessage();
         });
@@ -222,14 +204,8 @@ create_label_with_text('Hello WebScreen!');
             this.clearEmbedderConversation();
         });
 
-        // Embedder settings
         document.getElementById('embedderModel').addEventListener('change', (e) => {
             this.embedderSettings.model = e.target.value;
-        });
-
-        document.getElementById('embedderTemp').addEventListener('input', (e) => {
-            this.embedderSettings.temperature = parseFloat(e.target.value);
-            document.getElementById('embedderTempValue').textContent = e.target.value;
         });
 
         // Embedder quick actions
@@ -704,36 +680,11 @@ create_label_with_text('Hello WebScreen!');
         }
     }
 
-    startBrowserAuth() {
-        // Browser-based OAuth callback flow via PHP backend
-        // PHP handles token exchange and session management
-
-        const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
-        const callbackUrl = baseUrl + this.embedderConfig.phpAuthUrl + '?action=callback';
-
-        // Build Embedder auth URL
-        const authUrl = new URL(this.embedderConfig.authUrl);
-        authUrl.searchParams.set('callback', callbackUrl);
-        authUrl.searchParams.set('source', 'webscreen-ide');
-
-        console.log('[Embedder] Starting browser OAuth flow...');
-        console.log('[Embedder] Callback URL:', callbackUrl);
-        console.log('[Embedder] Auth URL:', authUrl.toString());
-
-        this.updateEmbedderStatus('Redirecting to Embedder...', 'info');
-
-        // Redirect to Embedder auth page
-        // Embedder will redirect to PHP callback which handles token exchange
-        window.location.href = authUrl.toString();
-    }
-
     async startDeviceCodeAuth() {
-        // Device code flow via PHP backend (no CORS issues!)
         console.log('[Embedder] Starting device code flow...');
         this.updateEmbedderStatus('Starting device code authentication...', 'info');
 
         try {
-            // Step 1: Request device code from PHP backend
             const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=start_device_code`);
 
             if (!response.ok) {
@@ -751,10 +702,8 @@ create_label_with_text('Hello WebScreen!');
 
             console.log('[Embedder] Device code received:', { userCode, verificationUri });
 
-            // Show device code UI
             this.showDeviceCodeUI(userCode, verificationUri);
 
-            // Step 2: Start polling for authorization
             const expiresAt = Date.now() + (expiresIn * 1000);
             this.startDeviceCodePolling(userCode, expiresAt);
 
@@ -765,30 +714,25 @@ create_label_with_text('Hello WebScreen!');
     }
 
     showDeviceCodeUI(userCode, verificationUri) {
-        // Hide auth method selection
         document.getElementById('authMethodSelection').classList.add('hidden');
 
-        // Show device code display
         const deviceCodeDisplay = document.getElementById('deviceCodeDisplay');
         deviceCodeDisplay.classList.remove('hidden');
 
-        // Set the code and URL
         document.getElementById('deviceCodeValue').textContent = userCode;
         document.getElementById('verificationUrl').textContent = verificationUri;
         document.getElementById('verificationUrl').href = verificationUri;
 
-        // Open verification URL in new tab
         window.open(verificationUri, '_blank');
 
         this.updateEmbedderStatus('Enter the code shown above at the verification URL', 'info');
     }
 
     startDeviceCodePolling(userCode, expiresAt) {
-        const POLL_INTERVAL = 3000; // 3 seconds, same as CLI
+        const POLL_INTERVAL = 3000;
 
         const poll = async () => {
             try {
-                // Check if expired
                 if (Date.now() > expiresAt) {
                     console.log('[Embedder] Device code expired, restarting...');
                     this.cancelDeviceCodeAuth();
@@ -796,10 +740,6 @@ create_label_with_text('Hello WebScreen!');
                     return;
                 }
 
-                // Update status
-                document.getElementById('deviceCodeStatus').textContent = 'Waiting for activation...';
-
-                // Poll for token via PHP backend
                 const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=poll_device_code`);
 
                 if (!response.ok) {
@@ -816,16 +756,13 @@ create_label_with_text('Hello WebScreen!');
                 console.log('[Embedder] Poll response:', JSON.stringify(data));
 
                 if (data.status === 'authorized' && (data.accessToken || data.credentialsStored)) {
-                    // Success! PHP backend has exchanged the token
                     console.log('[Embedder] Device authorized! Token exchanged by PHP backend.');
-                    this.cancelDeviceCodeAuth(); // Stop polling
+                    this.cancelDeviceCodeAuth();
 
                     this.updateEmbedderStatus('Device authorized! Loading credentials...', 'success');
 
-                    // Wait a moment for session to be written
                     await new Promise(resolve => setTimeout(resolve, 500));
 
-                    // Load credentials from PHP session
                     const credentials = await this.loadEmbedderCredentials();
 
                     if (credentials && credentials.accessToken) {
@@ -838,18 +775,15 @@ create_label_with_text('Hello WebScreen!');
                     }
 
                 } else if (data.status === 'authorization_pending') {
-                    // Keep polling
                     console.log('[Embedder] Still waiting for user to authorize...');
                     this.deviceCodePolling = setTimeout(poll, POLL_INTERVAL);
 
                 } else if (data.status === 'code_not_found') {
-                    // Code not found, restart flow
                     console.log('[Embedder] Code not found, restarting...');
                     this.cancelDeviceCodeAuth();
                     this.startDeviceCodeAuth();
 
                 } else {
-                    // Unknown status
                     console.error('[Embedder] Unknown poll status:', data);
                     throw new Error(data.status || 'Unknown error occurred');
                 }
@@ -861,12 +795,10 @@ create_label_with_text('Hello WebScreen!');
             }
         };
 
-        // Start polling
         poll();
     }
 
     cancelDeviceCodeAuth() {
-        // Stop polling
         if (this.deviceCodePolling) {
             clearTimeout(this.deviceCodePolling);
             this.deviceCodePolling = null;
@@ -882,79 +814,6 @@ create_label_with_text('Hello WebScreen!');
         document.getElementById('authMethodSelection').classList.remove('hidden');
 
         console.log('[Embedder] Device code authentication cancelled');
-    }
-
-    async submitManualToken() {
-        const input = document.getElementById('manualTokenInput');
-        const token = input.value.trim();
-
-        if (!token) {
-            this.updateEmbedderStatus('Please enter a token', 'error');
-            return;
-        }
-
-        console.log('[Embedder] Manual token submitted');
-        this.updateEmbedderStatus('Processing token...', 'info');
-
-        try {
-            // Exchange token via PHP backend
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=exchange_token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ token })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Token exchange failed: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Token exchange failed');
-            }
-
-            input.value = '';  // Clear input after successful submission
-            this.updateEmbedderStatus('Authentication successful!', 'success');
-
-            // Load credentials from PHP session
-            await this.loadEmbedderCredentials();
-            await this.updateEmbedderUI();
-
-        } catch (error) {
-            console.error('[Embedder] Manual token error:', error);
-            this.updateEmbedderStatus(`Token exchange failed: ${error.message}`, 'error');
-        }
-    }
-
-    async embedderRefreshToken() {
-        this.updateEmbedderStatus('Refreshing token...', 'info');
-
-        try {
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=refresh_token`);
-
-            if (!response.ok) {
-                throw new Error(`Token refresh failed: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Token refresh failed');
-            }
-
-            this.updateEmbedderStatus('Token refreshed successfully!', 'success');
-
-            // Load updated credentials from PHP session
-            await this.loadEmbedderCredentials();
-            await this.updateEmbedderUI();
-
-        } catch (error) {
-            this.updateEmbedderStatus(`Token refresh failed: ${error.message}`, 'error');
-            console.error('[Embedder] Token refresh error:', error);
-        }
     }
 
     async embedderLogout() {
@@ -976,7 +835,6 @@ create_label_with_text('Hello WebScreen!');
 
             this.updateEmbedderStatus('Logged out successfully', 'info');
 
-            // Clear local credential cache
             this.credentials = null;
             await this.updateEmbedderUI();
 
@@ -1022,51 +880,40 @@ create_label_with_text('Hello WebScreen!');
     }
 
     async updateEmbedderUI() {
-        // Use cached credentials - don't reload to avoid excessive requests
-        // Credentials are loaded explicitly when auth state changes (login, logout, refresh)
         const credentials = this.credentials;
         const isAuthenticated = credentials && credentials.accessToken;
         const isExpired = credentials && Date.now() > credentials.expiresAt;
 
         console.log('[Embedder] UI Update - Authenticated:', isAuthenticated, 'Expired:', isExpired);
 
-        // Toggle auth method selection vs authenticated actions
         document.getElementById('authMethodSelection').classList.toggle('hidden', isAuthenticated);
         document.getElementById('authenticatedActions').classList.toggle('hidden', !isAuthenticated);
-
-        // Toggle sections
         document.getElementById('userSection').classList.toggle('hidden', !isAuthenticated);
 
-        // Enable/disable chat controls
         const chatEnabled = isAuthenticated && !isExpired;
         document.getElementById('embedderInput').disabled = !chatEnabled;
         document.getElementById('sendEmbedderMessage').disabled = !chatEnabled;
         document.getElementById('sendCodeToEmbedder').disabled = !chatEnabled;
         document.getElementById('clearEmbedderChat').disabled = !chatEnabled;
 
-        // Enable/disable quick action buttons
         document.querySelectorAll('.embedder-quick-btn').forEach(btn => {
             btn.disabled = !chatEnabled;
         });
 
-        // Update status indicator
         const statusDot = document.getElementById('embedderStatusIndicator');
         const statusText = document.getElementById('embedderStatusText');
 
         if (isAuthenticated) {
-            // Display user info
             const userInfo = {
                 email: credentials.user?.email || 'N/A',
                 uid: credentials.user?.uid ? credentials.user.uid.substring(0, 8) + '...' : 'N/A'
             };
             document.getElementById('userInfo').textContent = JSON.stringify(userInfo, null, 2);
 
-            // Load available models (only if not expired)
             if (!isExpired) {
                 await this.loadEmbedderModels();
             }
 
-            // Update status
             if (isExpired) {
                 statusDot.className = 'status-dot disconnected';
                 statusText.textContent = 'Token expired';
@@ -1074,7 +921,6 @@ create_label_with_text('Hello WebScreen!');
             } else {
                 statusDot.className = 'status-dot connected';
                 statusText.textContent = 'Connected';
-                // Don't overwrite more specific status messages
                 const currentStatus = document.getElementById('authStatus');
                 if (!currentStatus || currentStatus.textContent.includes('Not authenticated')) {
                     this.updateEmbedderStatus('Authenticated', 'success');
@@ -1083,7 +929,6 @@ create_label_with_text('Hello WebScreen!');
         } else {
             statusDot.className = 'status-dot disconnected';
             statusText.textContent = 'Not authenticated';
-            // Don't overwrite more specific status messages during auth flow
             const currentStatus = document.getElementById('authStatus');
             if (!currentStatus || !currentStatus.textContent.includes('Processing')) {
                 this.updateEmbedderStatus('Not authenticated', 'info');

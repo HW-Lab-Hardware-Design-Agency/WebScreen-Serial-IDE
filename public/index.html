@@ -115,9 +115,9 @@
                             <!-- Conversation Display -->
                             <div id="embedderConversation" class="embedder-conversation">
                                 <div class="embedder-welcome">
-                                    <h4>Welcome to Embedder</h4>
-                                    <p>Please login to start chatting with the AI assistant.</p>
-                                    <p>You can ask questions about your code, request improvements, or get help with debugging.</p>
+                                    <h4>AI Assistant</h4>
+                                    <p><strong>Note:</strong> This feature uses Embedder, a third-party AI service operated by Embedder Tech Inc. It is not affiliated with or part of WebScreen.</p>
+                                    <p>To use this feature, you need an Embedder account. Create one at <a href="https://embedder.dev/" target="_blank" style="color: #4CAF50;">embedder.dev</a></p>
                                 </div>
                             </div>
 
@@ -154,40 +154,20 @@
 
                         <!-- Sidebar with Auth & Settings -->
                         <div class="embedder-sidebar">
-                            <!-- Authentication -->
                             <div class="embedder-section compact">
                                 <h4>Authentication</h4>
 
-                                <!-- Not Authenticated View -->
                                 <div id="authMethodSelection" class="button-group">
-                                    <button id="loginBrowserBtn" class="btn btn-primary btn-sm">Browser Redirect</button>
-                                    <button id="loginDeviceCodeBtn" class="btn btn-primary btn-sm">Device Code</button>
+                                    <button id="loginDeviceCodeBtn" class="btn btn-primary btn-sm">Login</button>
                                 </div>
 
-                                <!-- Device Code Display (hidden by default) -->
-                                <div id="deviceCodeDisplay" class="hidden" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
-                                    <div style="text-align: center; margin-bottom: 10px;">
-                                        <div style="font-size: 10px; opacity: 0.8; margin-bottom: 5px;">Enter this code at:</div>
-                                        <a id="verificationUrl" href="#" target="_blank" style="font-size: 11px; color: #4CAF50;"></a>
-                                    </div>
-                                    <div style="text-align: center; margin: 10px 0;">
-                                        <div id="deviceCodeValue" style="font-size: 20px; font-weight: bold; color: #4CAF50; letter-spacing: 3px;"></div>
-                                    </div>
-                                    <div id="deviceCodeStatus" style="font-size: 10px; text-align: center; opacity: 0.8; margin-top: 10px;">Waiting for activation...</div>
-                                    <button id="cancelDeviceCode" class="btn btn-sm btn-danger" style="width: 100%; margin-top: 10px; font-size: 10px;">Cancel</button>
+                                <div id="deviceCodeDisplay" class="hidden" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; text-align: center;">
+                                    <a id="verificationUrl" href="#" target="_blank" style="font-size: 11px; color: #4CAF50; display: block; margin-bottom: 10px;"></a>
+                                    <div id="deviceCodeValue" style="font-size: 20px; font-weight: bold; color: #4CAF50; letter-spacing: 3px;"></div>
                                 </div>
 
-                                <!-- Authenticated View -->
                                 <div id="authenticatedActions" class="button-group hidden">
                                     <button id="logoutBtn" class="btn btn-danger btn-sm">Logout</button>
-                                    <button id="refreshTokenBtn" class="btn btn-sm">Refresh Token</button>
-                                </div>
-
-                                <!-- Manual Token Input -->
-                                <div style="margin-top: 10px;">
-                                    <div style="font-size: 10px; margin-bottom: 5px; opacity: 0.8;">Or paste token manually:</div>
-                                    <input type="text" id="manualTokenInput" class="input-field" placeholder="Paste custom token here..." style="font-size: 10px; padding: 4px;">
-                                    <button id="submitManualToken" class="btn btn-sm" style="width: 100%; margin-top: 5px; font-size: 10px;">Submit Token</button>
                                 </div>
                             </div>
 
@@ -199,22 +179,15 @@
                                 </div>
                             </div>
 
-                            <!-- Settings -->
                             <div class="embedder-section compact">
-                                <h4>Settings</h4>
+                                <h4>Model</h4>
                                 <div class="embedder-setting">
-                                    <label for="embedderModel">Model:</label>
                                     <select id="embedderModel" class="input-field">
                                         <option value="claude-sonnet-4-20250514" selected>Claude Sonnet 4 (Latest)</option>
                                         <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
                                         <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
                                         <option value="gpt-4o">GPT-4o</option>
                                     </select>
-                                </div>
-                                <div class="embedder-setting">
-                                    <label for="embedderTemp">Temperature:</label>
-                                    <input type="range" id="embedderTemp" min="0" max="1" step="0.1" value="0.7" class="slider">
-                                    <span id="embedderTempValue">0.7</span>
                                 </div>
                             </div>
 
