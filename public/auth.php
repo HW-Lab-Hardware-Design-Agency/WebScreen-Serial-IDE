@@ -302,6 +302,30 @@ function exchangeToken($customToken) {
 
         $_SESSION['embedder_credentials'] = $credentials;
 
+        // Create an Embedder session (like CLI does in line 95-96)
+        try {
+            $sessionResponse = makeRequest(
+                EMBEDDER_CONFIG['backendUrl'] . '/api/v1/sessions',
+                'POST',
+                [],
+                [
+                    'Authorization: Bearer ' . $data['idToken'],
+                    'Content-Type: application/json',
+                    'User-Agent: webscreen-serial-ide/1.0.0'
+                ]
+            );
+
+            if ($sessionResponse['status'] === 200 && isset($sessionResponse['data']['id'])) {
+                $_SESSION['embedder_session_id'] = $sessionResponse['data']['id'];
+                error_log('[Auth] Created Embedder session: ' . $_SESSION['embedder_session_id']);
+            } else {
+                error_log('[Auth] Failed to create session: ' . json_encode($sessionResponse));
+            }
+        } catch (Exception $e) {
+            error_log('[Auth] Error creating session: ' . $e->getMessage());
+            // Continue even if session creation fails - it's not critical for auth
+        }
+
         return [
             'success' => true,
             'credentials' => $credentials
@@ -457,6 +481,8 @@ function getCredentials() {
 function logout() {
     unset($_SESSION['embedder_credentials']);
     unset($_SESSION['device_code_data']);
+    unset($_SESSION['embedder_session_id']);
+    unset($_SESSION['embedder_project_id']);
 
     return [
         'success' => true,
@@ -602,9 +628,10 @@ function proxyAPI() {
         ];
 
         // Headers added in useEffect (conditional in CLI, always present for web)
-        // Note: x-session-id should only be sent if we have a valid session from Embedder
-        // For now, DON'T send it - let Embedder create one if needed
-        // $headers[] = 'x-session-id: ' . $_SESSION['embedder_session_uuid'];
+        // Use the session ID created during authentication
+        if (isset($_SESSION['embedder_session_id'])) {
+            $headers[] = 'x-session-id: ' . $_SESSION['embedder_session_id'];
+        }
         $headers[] = 'authorization: Bearer ' . $credentials['accessToken'];  // lowercase for HTTP/2
         $headers[] = 'x-agent-mode: act';
 
