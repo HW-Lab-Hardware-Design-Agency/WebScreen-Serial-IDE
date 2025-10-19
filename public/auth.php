@@ -249,15 +249,34 @@ function exchangeToken($customToken) {
 
         $data = $response['data'];
 
-        // Extract expiry from JWT payload
+        // Parse JWT to extract user info and expiry
         $expiresAt = time() + 3600; // Default 1 hour
+        $userEmail = null;
+        $userName = null;
+        $userPicture = null;
+
         try {
             $payload = parseJWT($data['idToken']);
+
+            // Extract expiry
             if (isset($payload['exp'])) {
                 $expiresAt = $payload['exp'];
             }
+
+            // Extract user info from JWT payload
+            if (isset($payload['email'])) {
+                $userEmail = $payload['email'];
+            }
+            if (isset($payload['name'])) {
+                $userName = $payload['name'];
+            }
+            if (isset($payload['picture'])) {
+                $userPicture = $payload['picture'];
+            }
+
+            error_log('[Auth] Extracted user from JWT: ' . $userEmail . ' (' . $userName . ')');
         } catch (Exception $e) {
-            error_log('[Auth] Could not parse token expiry: ' . $e->getMessage());
+            error_log('[Auth] Could not parse JWT: ' . $e->getMessage());
         }
 
         // Store credentials in session
@@ -268,8 +287,9 @@ function exchangeToken($customToken) {
             'expiresAt' => $expiresAt * 1000, // Milliseconds for JS
             'user' => [
                 'uid' => $data['localId'],
-                'email' => isset($data['email']) ? $data['email'] : null,
-                'displayName' => isset($data['displayName']) ? $data['displayName'] : null
+                'email' => $userEmail,
+                'displayName' => $userName,
+                'picture' => $userPicture
             ],
             'timestamp' => time() * 1000
         ];
@@ -326,12 +346,34 @@ function refreshToken() {
 
         $data = json_decode($response, true);
 
-        // Extract expiry
+        // Parse JWT to extract user info and expiry
         $expiresIn = isset($data['expires_in'])
             ? (is_string($data['expires_in']) ? intval($data['expires_in']) : $data['expires_in'])
             : 3600;
 
         $expiresAt = time() + $expiresIn;
+
+        // Extract user info from refreshed JWT token
+        $userEmail = null;
+        $userName = null;
+        $userPicture = null;
+
+        try {
+            $payload = parseJWT($data['id_token']);
+
+            // Extract user info from JWT payload
+            if (isset($payload['email'])) {
+                $userEmail = $payload['email'];
+            }
+            if (isset($payload['name'])) {
+                $userName = $payload['name'];
+            }
+            if (isset($payload['picture'])) {
+                $userPicture = $payload['picture'];
+            }
+        } catch (Exception $e) {
+            error_log('[Auth] Could not parse refreshed JWT: ' . $e->getMessage());
+        }
 
         // Update credentials
         $_SESSION['embedder_credentials']['accessToken'] = $data['id_token'];
@@ -341,6 +383,13 @@ function refreshToken() {
             : $refreshToken;
         $_SESSION['embedder_credentials']['expiresAt'] = $expiresAt * 1000;
         $_SESSION['embedder_credentials']['timestamp'] = time() * 1000;
+
+        // Update user info from refreshed token
+        if ($userEmail || $userName || $userPicture) {
+            $_SESSION['embedder_credentials']['user']['email'] = $userEmail;
+            $_SESSION['embedder_credentials']['user']['displayName'] = $userName;
+            $_SESSION['embedder_credentials']['user']['picture'] = $userPicture;
+        }
 
         return [
             'success' => true,

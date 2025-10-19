@@ -586,13 +586,10 @@ create_label_with_text('Hello WebScreen!');
         await this.loadEmbedderCredentials();
 
         // Update UI
-        this.updateEmbedderUI();
+        await this.updateEmbedderUI();
 
-        // Auto-refresh embedder UI every second to update token expiration
-        setInterval(async () => {
-            await this.loadEmbedderCredentials();
-            this.updateEmbedderUI();
-        }, 1000);
+        // No auto-refresh to prevent excessive requests to auth.php
+        // UI will update when authentication state changes (login, logout, refresh)
     }
 
 
@@ -654,7 +651,7 @@ create_label_with_text('Hello WebScreen!');
             console.log('[Embedder] Saving credentials...');
             this.saveEmbedderCredentials(credentials);
             this.updateEmbedderStatus('Authentication successful! You can now chat with Embedder.', 'success');
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
             console.log('[Embedder] Authentication complete!');
 
         } catch (error) {
@@ -834,7 +831,7 @@ create_label_with_text('Hello WebScreen!');
                     if (credentials && credentials.accessToken) {
                         console.log('[Embedder] Credentials loaded successfully!');
                         this.updateEmbedderStatus('Authentication complete!', 'success');
-                        this.updateEmbedderUI();
+                        await this.updateEmbedderUI();
                     } else {
                         console.error('[Embedder] Failed to load credentials after authorization');
                         this.updateEmbedderStatus('Authorization succeeded but failed to load credentials. Please refresh the page.', 'error');
@@ -924,7 +921,7 @@ create_label_with_text('Hello WebScreen!');
 
             // Load credentials from PHP session
             await this.loadEmbedderCredentials();
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
 
         } catch (error) {
             console.error('[Embedder] Manual token error:', error);
@@ -952,7 +949,7 @@ create_label_with_text('Hello WebScreen!');
 
             // Load updated credentials from PHP session
             await this.loadEmbedderCredentials();
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
 
         } catch (error) {
             this.updateEmbedderStatus(`Token refresh failed: ${error.message}`, 'error');
@@ -981,13 +978,13 @@ create_label_with_text('Hello WebScreen!');
 
             // Clear local credential cache
             this.credentials = null;
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
 
         } catch (error) {
             console.error('[Embedder] Logout error:', error);
             this.updateEmbedderStatus('Logged out (with error)', 'info');
             this.credentials = null;
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
         }
     }
 
@@ -1024,10 +1021,15 @@ create_label_with_text('Hello WebScreen!');
         }
     }
 
-    updateEmbedderUI() {
+    async updateEmbedderUI() {
+        // Always load fresh credentials from PHP session
+        await this.loadEmbedderCredentials();
+
         const credentials = this.credentials;  // Use cached credentials
         const isAuthenticated = credentials && credentials.accessToken;
         const isExpired = credentials && Date.now() > credentials.expiresAt;
+
+        console.log('[Embedder] UI Update - Authenticated:', isAuthenticated, 'Expired:', isExpired);
 
         // Toggle auth method selection vs authenticated actions
         document.getElementById('authMethodSelection').classList.toggle('hidden', isAuthenticated);
@@ -1055,8 +1057,8 @@ create_label_with_text('Hello WebScreen!');
         if (isAuthenticated) {
             // Display user info
             const userInfo = {
-                email: credentials.user?.email,
-                uid: credentials.user?.uid?.substring(0, 8) + '...'
+                email: credentials.user?.email || 'N/A',
+                uid: credentials.user?.uid ? credentials.user.uid.substring(0, 8) + '...' : 'N/A'
             };
             document.getElementById('userInfo').textContent = JSON.stringify(userInfo, null, 2);
 
@@ -1068,12 +1070,20 @@ create_label_with_text('Hello WebScreen!');
             } else {
                 statusDot.className = 'status-dot connected';
                 statusText.textContent = 'Connected';
-                this.updateEmbedderStatus('Authenticated', 'success');
+                // Don't overwrite more specific status messages
+                const currentStatus = document.getElementById('authStatus');
+                if (!currentStatus || currentStatus.textContent.includes('Not authenticated')) {
+                    this.updateEmbedderStatus('Authenticated', 'success');
+                }
             }
         } else {
             statusDot.className = 'status-dot disconnected';
             statusText.textContent = 'Not authenticated';
-            this.updateEmbedderStatus('Not authenticated', 'info');
+            // Don't overwrite more specific status messages during auth flow
+            const currentStatus = document.getElementById('authStatus');
+            if (!currentStatus || !currentStatus.textContent.includes('Processing')) {
+                this.updateEmbedderStatus('Not authenticated', 'info');
+            }
         }
     }
 
@@ -1122,9 +1132,17 @@ create_label_with_text('Hello WebScreen!');
 
         if (!message) return;
 
-        const credentials = this.loadEmbedderCredentials();
-        if (!credentials || !credentials.accessToken) {
+        // Check cached credentials
+        if (!this.credentials || !this.credentials.accessToken) {
             alert('Please login with Embedder first');
+            this.updateEmbedderStatus('Not authenticated. Please login first.', 'error');
+            return;
+        }
+
+        // Check if token is expired
+        if (Date.now() > this.credentials.expiresAt) {
+            alert('Token expired. Please refresh or login again.');
+            this.updateEmbedderStatus('Token expired', 'error');
             return;
         }
 
@@ -1141,7 +1159,7 @@ create_label_with_text('Hello WebScreen!');
         this.showEmbedderTyping();
 
         try {
-            const response = await this.callEmbedderAPI(this.embedderConversation, credentials.accessToken);
+            const response = await this.callEmbedderAPI(this.embedderConversation, this.credentials.accessToken);
 
             // Remove typing indicator
             this.hideEmbedderTyping();
@@ -1324,9 +1342,9 @@ create_label_with_text('Hello WebScreen!');
     }
 
     embedderQuickAction(prompt) {
-        const credentials = this.loadEmbedderCredentials();
-        if (!credentials || !credentials.accessToken) {
+        if (!this.credentials || !this.credentials.accessToken) {
             alert('Please login with Embedder first');
+            this.updateEmbedderStatus('Not authenticated. Please login first.', 'error');
             return;
         }
 
