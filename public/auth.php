@@ -580,22 +580,31 @@ function proxyAPI() {
         // Build headers matching Embedder CLI implementation
         // x-platform-type must be one of: win32, linux, darwin
         // x-folder-type must be one of: versioned, unversioned
+
+        // Base headers (always present in CLI)
         $headers = [
-            'Authorization: Bearer ' . $credentials['accessToken'],
-            'User-Agent: webscreen-serial-ide/1.0.0',
-            'x-client-type: web',
-            'x-session-id: ' . $_SESSION['embedder_session_uuid'],
-            'x-agent-mode: act',
             'x-platform-type: linux',
             'x-sandbox-type: none',
             'x-folder-type: unversioned',
-            'x-working-directory: /',
-            'x-project-type: web',
-            'x-project-id: ',
-            'x-has-git: false',
-            'x-context-timestamp: ' . time(),
-            'x-api-key: embedder-cli'
+            'x-client-type: web',
         ];
+
+        // Headers added in useEffect (conditional in CLI, always present for web)
+        $headers[] = 'x-session-id: ' . $_SESSION['embedder_session_uuid'];
+        $headers[] = 'Authorization: Bearer ' . $credentials['accessToken'];
+        $headers[] = 'x-agent-mode: act';
+
+        // Context headers - CLI only sends if context exists
+        // Try WITHOUT context headers first (matching CLI with no context)
+        // Uncomment these if needed:
+        // $headers[] = 'x-working-directory: /';
+        // $headers[] = 'x-project-type: web';
+        // $headers[] = 'x-has-git: false';
+        // $headers[] = 'x-context-timestamp: ' . time();
+
+        // These headers are added by the provider clients in CLI
+        $headers[] = 'x-api-key: embedder-cli';
+        $headers[] = 'User-Agent: webscreen-serial-ide/1.0.0';
 
         // Add Anthropic-specific headers for Claude models
         if (strpos($model, 'claude-') === 0) {
