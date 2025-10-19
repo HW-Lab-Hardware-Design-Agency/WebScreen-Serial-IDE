@@ -569,7 +569,7 @@ function proxyAPI() {
         if (strpos($model, 'claude-') === 0) {
             // Anthropic models
             $proxyUrl = EMBEDDER_CONFIG['backendUrl'] . '/api/v1/proxy/anthropic/';
-            $endpoint = 'v1/messages';
+            $endpoint = 'messages';
             $requestBody = [
                 'model' => $model,
                 'messages' => $messages,
