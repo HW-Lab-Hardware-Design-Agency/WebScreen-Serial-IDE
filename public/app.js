@@ -1188,55 +1188,41 @@ create_label_with_text('Hello WebScreen!');
     async callEmbedderAPI(messages, token) {
         const model = this.embedderSettings.model;
 
-        // Determine which proxy to use based on model
-        let proxyUrl, endpoint, requestBody, isAnthropic;
+        console.log('[Embedder] API Request via PHP proxy:', { model, messageCount: messages.length });
 
-        if (model.startsWith('claude-')) {
-            // Anthropic models
-            proxyUrl = this.embedderConfig.proxyAnthropicUrl;
-            endpoint = 'v1/messages';
-            isAnthropic = true;
-            requestBody = {
-                model: model,
-                messages: messages,
-                max_tokens: 4096,
-                temperature: this.embedderSettings.temperature
-            };
-        } else if (model.startsWith('gpt-')) {
-            // OpenAI models
-            proxyUrl = this.embedderConfig.proxyOpenAIUrl;
-            endpoint = 'v1/chat/completions';
-            isAnthropic = false;
-            requestBody = {
-                model: model,
-                messages: messages,
-                temperature: this.embedderSettings.temperature
-            };
-        } else {
-            throw new Error(`Unsupported model: ${model}`);
-        }
-
-        console.log('[Embedder] API Request:', { proxyUrl, endpoint, model });
-
-        const response = await fetch(proxyUrl + endpoint, {
+        // Call PHP proxy instead of Embedder API directly (bypasses CORS)
+        const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=proxy_api`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: model,
+                messages: messages,
+                temperature: this.embedderSettings.temperature,
+                max_tokens: 4096
+            })
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[Embedder] API Error Response:', errorText);
-            throw new Error(`API request failed: ${response.status} - ${errorText}`);
+            console.error('[Embedder] Proxy Error Response:', errorText);
+            throw new Error(`Proxy request failed: ${response.status} - ${errorText}`);
         }
 
-        const data = await response.json();
-        console.log('[Embedder] API Response:', data);
+        const result = await response.json();
+
+        if (!result.success) {
+            console.error('[Embedder] API Error:', result.error);
+            throw new Error(result.error || 'API request failed');
+        }
+
+        const data = result.data;
+        console.log('[Embedder] API Response received');
 
         // Parse response based on API type
+        const isAnthropic = model.startsWith('claude-');
+
         if (isAnthropic) {
             // Anthropic response format: { content: [{ type: "text", text: "..." }] }
             return {

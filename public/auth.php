@@ -505,6 +505,109 @@ function handleCallback() {
     ];
 }
 
+/**
+ * Proxy API requests to Embedder backend
+ * Bypasses CORS restrictions by making server-to-server requests
+ */
+function proxyAPI() {
+    try {
+        // Check authentication
+        if (!isset($_SESSION['embedder_credentials'])) {
+            throw new Exception('Not authenticated');
+        }
+
+        $credentials = $_SESSION['embedder_credentials'];
+
+        // Validate token
+        if (!validateToken($credentials['accessToken'])) {
+            throw new Exception('Token invalid or expired');
+        }
+
+        // Get request body
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        if (!$input || !isset($input['model']) || !isset($input['messages'])) {
+            throw new Exception('Invalid request: model and messages required');
+        }
+
+        $model = $input['model'];
+        $messages = $input['messages'];
+        $temperature = isset($input['temperature']) ? $input['temperature'] : 0.7;
+        $maxTokens = isset($input['max_tokens']) ? $input['max_tokens'] : 4096;
+
+        // Determine which proxy to use based on model
+        $proxyUrl = '';
+        $endpoint = '';
+        $requestBody = [];
+
+        if (strpos($model, 'claude-') === 0) {
+            // Anthropic models
+            $proxyUrl = EMBEDDER_CONFIG['backendUrl'] . '/api/v1/proxy/anthropic/';
+            $endpoint = 'v1/messages';
+            $requestBody = [
+                'model' => $model,
+                'messages' => $messages,
+                'max_tokens' => $maxTokens,
+                'temperature' => $temperature
+            ];
+        } elseif (strpos($model, 'gpt-') === 0) {
+            // OpenAI models
+            $proxyUrl = EMBEDDER_CONFIG['backendUrl'] . '/api/v1/proxy/openai/';
+            $endpoint = 'v1/chat/completions';
+            $requestBody = [
+                'model' => $model,
+                'messages' => $messages,
+                'temperature' => $temperature
+            ];
+        } else {
+            throw new Exception('Unsupported model: ' . $model);
+        }
+
+        error_log('[Proxy] API Request to: ' . $proxyUrl . $endpoint);
+
+        // Build headers matching Embedder CLI implementation
+        $headers = [
+            'Authorization: Bearer ' . $credentials['accessToken'],
+            'User-Agent: webscreen-serial-ide/1.0.0',
+            'x-client-type: web'
+        ];
+
+        // Add session ID if available
+        if (session_id()) {
+            $headers[] = 'x-session-id: ' . session_id();
+        }
+
+        // Make request to Embedder backend
+        $response = makeRequest(
+            $proxyUrl . $endpoint,
+            'POST',
+            $requestBody,
+            $headers
+        );
+
+        if ($response['status'] !== 200) {
+            $errorMsg = 'API request failed: ' . $response['status'];
+            if (isset($response['data']['error'])) {
+                $errorMsg .= ' - ' . json_encode($response['data']['error']);
+            }
+            throw new Exception($errorMsg);
+        }
+
+        error_log('[Proxy] API Response received successfully');
+
+        return [
+            'success' => true,
+            'data' => $response['data']
+        ];
+    } catch (Exception $e) {
+        error_log('[Proxy] API Error: ' . $e->getMessage());
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
 // Route requests based on action parameter
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
@@ -558,6 +661,10 @@ try {
             handleCallback();
             break;
 
+        case 'proxy_api':
+            echo json_encode(proxyAPI());
+            break;
+
         default:
             http_response_code(400);
             echo json_encode([
@@ -570,7 +677,8 @@ try {
                     'refresh_token',
                     'get_credentials',
                     'logout',
-                    'callback'
+                    'callback',
+                    'proxy_api'
                 ]
             ]);
     }
