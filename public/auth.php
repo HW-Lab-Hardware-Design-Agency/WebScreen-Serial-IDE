@@ -254,6 +254,7 @@ function exchangeToken($customToken) {
         $userEmail = null;
         $userName = null;
         $userPicture = null;
+        $userId = null;
 
         try {
             $payload = parseJWT($data['idToken']);
@@ -264,6 +265,11 @@ function exchangeToken($customToken) {
             }
 
             // Extract user info from JWT payload
+            if (isset($payload['user_id'])) {
+                $userId = $payload['user_id'];
+            } elseif (isset($payload['sub'])) {
+                $userId = $payload['sub'];
+            }
             if (isset($payload['email'])) {
                 $userEmail = $payload['email'];
             }
@@ -274,7 +280,7 @@ function exchangeToken($customToken) {
                 $userPicture = $payload['picture'];
             }
 
-            error_log('[Auth] Extracted user from JWT: ' . $userEmail . ' (' . $userName . ')');
+            error_log('[Auth] Extracted user from JWT: ' . $userEmail . ' (' . $userName . ') UID: ' . $userId);
         } catch (Exception $e) {
             error_log('[Auth] Could not parse JWT: ' . $e->getMessage());
         }
@@ -286,7 +292,7 @@ function exchangeToken($customToken) {
             'refreshToken' => $data['refreshToken'],
             'expiresAt' => $expiresAt * 1000, // Milliseconds for JS
             'user' => [
-                'uid' => $data['localId'],
+                'uid' => $userId,
                 'email' => $userEmail,
                 'displayName' => $userName,
                 'picture' => $userPicture
@@ -357,11 +363,17 @@ function refreshToken() {
         $userEmail = null;
         $userName = null;
         $userPicture = null;
+        $userId = null;
 
         try {
             $payload = parseJWT($data['id_token']);
 
             // Extract user info from JWT payload
+            if (isset($payload['user_id'])) {
+                $userId = $payload['user_id'];
+            } elseif (isset($payload['sub'])) {
+                $userId = $payload['sub'];
+            }
             if (isset($payload['email'])) {
                 $userEmail = $payload['email'];
             }
@@ -385,7 +397,8 @@ function refreshToken() {
         $_SESSION['embedder_credentials']['timestamp'] = time() * 1000;
 
         // Update user info from refreshed token
-        if ($userEmail || $userName || $userPicture) {
+        if ($userId || $userEmail || $userName || $userPicture) {
+            $_SESSION['embedder_credentials']['user']['uid'] = $userId;
             $_SESSION['embedder_credentials']['user']['email'] = $userEmail;
             $_SESSION['embedder_credentials']['user']['displayName'] = $userName;
             $_SESSION['embedder_credentials']['user']['picture'] = $userPicture;

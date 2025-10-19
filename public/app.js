@@ -1022,10 +1022,9 @@ create_label_with_text('Hello WebScreen!');
     }
 
     async updateEmbedderUI() {
-        // Always load fresh credentials from PHP session
-        await this.loadEmbedderCredentials();
-
-        const credentials = this.credentials;  // Use cached credentials
+        // Use cached credentials - don't reload to avoid excessive requests
+        // Credentials are loaded explicitly when auth state changes (login, logout, refresh)
+        const credentials = this.credentials;
         const isAuthenticated = credentials && credentials.accessToken;
         const isExpired = credentials && Date.now() > credentials.expiresAt;
 
