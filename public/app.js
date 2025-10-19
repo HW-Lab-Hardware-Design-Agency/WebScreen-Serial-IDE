@@ -185,6 +185,16 @@ create_label_with_text('Hello WebScreen!');
             this.embedderLogout();
         });
 
+        document.getElementById('closeAuthModal').addEventListener('click', () => {
+            this.closeAuthModal();
+        });
+
+        document.getElementById('authModal').addEventListener('click', (e) => {
+            if (e.target.id === 'authModal') {
+                this.closeAuthModal();
+            }
+        });
+
         document.getElementById('sendEmbedderMessage').addEventListener('click', () => {
             this.sendEmbedderMessage();
         });
@@ -714,18 +724,20 @@ create_label_with_text('Hello WebScreen!');
     }
 
     showDeviceCodeUI(userCode, verificationUri) {
-        document.getElementById('authMethodSelection').classList.add('hidden');
+        document.getElementById('modalDeviceCodeValue').textContent = userCode;
+        document.getElementById('modalVerificationUrl').textContent = verificationUri;
+        document.getElementById('modalVerificationUrl').href = verificationUri;
 
-        const deviceCodeDisplay = document.getElementById('deviceCodeDisplay');
-        deviceCodeDisplay.classList.remove('hidden');
-
-        document.getElementById('deviceCodeValue').textContent = userCode;
-        document.getElementById('verificationUrl').textContent = verificationUri;
-        document.getElementById('verificationUrl').href = verificationUri;
+        document.getElementById('authModal').classList.add('show');
 
         window.open(verificationUri, '_blank');
 
-        this.updateEmbedderStatus('Enter the code shown above at the verification URL', 'info');
+        this.updateEmbedderStatus('Waiting for authentication...', 'info');
+    }
+
+    closeAuthModal() {
+        document.getElementById('authModal').classList.remove('show');
+        this.cancelDeviceCodeAuth();
     }
 
     startDeviceCodePolling(userCode, expiresAt) {
@@ -804,14 +816,9 @@ create_label_with_text('Hello WebScreen!');
             this.deviceCodePolling = null;
         }
 
-        // Clear device code data
         this.deviceCodeData = null;
 
-        // Hide device code display
-        document.getElementById('deviceCodeDisplay').classList.add('hidden');
-
-        // Show auth method selection again
-        document.getElementById('authMethodSelection').classList.remove('hidden');
+        document.getElementById('authModal').classList.remove('show');
 
         console.log('[Embedder] Device code authentication cancelled');
     }

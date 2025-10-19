@@ -161,11 +161,6 @@
                                     <button id="loginDeviceCodeBtn" class="btn btn-primary btn-sm">Login</button>
                                 </div>
 
-                                <div id="deviceCodeDisplay" class="hidden" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; text-align: center;">
-                                    <a id="verificationUrl" href="#" target="_blank" style="font-size: 11px; color: #4CAF50; display: block; margin-bottom: 10px;"></a>
-                                    <div id="deviceCodeValue" style="font-size: 20px; font-weight: bold; color: #4CAF50; letter-spacing: 3px;"></div>
-                                </div>
-
                                 <div id="authenticatedActions" class="button-group hidden">
                                     <button id="logoutBtn" class="btn btn-danger btn-sm">Logout</button>
                                 </div>
@@ -360,6 +355,25 @@
                 <span id="deviceInfo">No device</span>
             </div>
         </footer>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div id="authModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <div class="auth-modal-header">
+                <h3>Embedder Authentication</h3>
+                <button id="closeAuthModal" class="auth-modal-close">&times;</button>
+            </div>
+            <div class="auth-modal-body">
+                <div class="auth-code-display">
+                    <a id="modalVerificationUrl" href="#" target="_blank" class="auth-code-url"></a>
+                    <div id="modalDeviceCodeValue" class="auth-code-value"></div>
+                </div>
+                <div class="auth-modal-instructions">
+                    A new tab has been opened. Enter the code above to authenticate.
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- CodeMirror JS -->
