@@ -594,13 +594,18 @@ function proxyAPI() {
         $headers[] = 'Authorization: Bearer ' . $credentials['accessToken'];
         $headers[] = 'x-agent-mode: act';
 
-        // Context headers - CLI only sends if context exists
-        // Try WITHOUT context headers first (matching CLI with no context)
-        // Uncomment these if needed:
-        // $headers[] = 'x-working-directory: /';
-        // $headers[] = 'x-project-type: web';
-        // $headers[] = 'x-has-git: false';
-        // $headers[] = 'x-context-timestamp: ' . time();
+        // Context headers - send them with web-appropriate values
+        // From CLI code analysis (line 31360-31365):
+        // e.environmentContext && ((n["x-working-directory"] = e.workingDirectory), ...)
+
+        // For web client, use minimal but valid context:
+        $headers[] = 'x-working-directory: /';
+        $headers[] = 'x-project-type: generic';  // Options: npm, git, embedded, generic
+        $headers[] = 'x-has-git: false';
+        $headers[] = 'x-context-timestamp: ' . (time() * 1000);  // Unix timestamp in milliseconds
+
+        // x-project-id - send with empty value (CLI uses projectId or empty string)
+        $headers[] = 'x-project-id: ';
 
         // These headers are added by the provider clients in CLI
         $headers[] = 'x-api-key: embedder-cli';
