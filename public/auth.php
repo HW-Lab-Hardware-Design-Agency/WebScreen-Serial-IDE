@@ -701,6 +701,54 @@ function proxyAPI() {
     }
 }
 
+/**
+ * Get available AI models from Embedder API
+ */
+function getModels() {
+    try {
+        // Check authentication
+        if (!isset($_SESSION['embedder_credentials'])) {
+            throw new Exception('Not authenticated');
+        }
+
+        $credentials = $_SESSION['embedder_credentials'];
+
+        // Validate token
+        if (!validateToken($credentials['accessToken'])) {
+            throw new Exception('Token invalid or expired');
+        }
+
+        // Call models endpoint
+        $url = EMBEDDER_CONFIG['backendUrl'] . '/api/v1/models';
+
+        $headers = [
+            'Authorization: Bearer ' . $credentials['accessToken'],
+            'Content-Type: application/json'
+        ];
+
+        error_log('[Models] Fetching models from: ' . $url);
+
+        $response = makeRequest($url, 'GET', [], $headers);
+
+        if ($response['status'] !== 200) {
+            throw new Exception('Failed to fetch models: ' . $response['status']);
+        }
+
+        error_log('[Models] Fetched ' . count($response['data']) . ' models');
+
+        return [
+            'success' => true,
+            'models' => $response['data']
+        ];
+    } catch (Exception $e) {
+        error_log('[Models] Error: ' . $e->getMessage());
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
 // Route requests based on action parameter
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
@@ -756,6 +804,10 @@ try {
 
         case 'proxy_api':
             echo json_encode(proxyAPI());
+            break;
+
+        case 'get_models':
+            echo json_encode(getModels());
             break;
 
         case 'debug_proxy_headers':

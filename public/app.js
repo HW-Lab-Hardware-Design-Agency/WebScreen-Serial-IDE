@@ -29,7 +29,7 @@ class WebScreenIDE {
 
         this.embedderConversation = [];
         this.embedderSettings = {
-            model: 'claude-4-5-sonnet',
+            model: 'claude-sonnet-4-20250514',
             temperature: 0.7
         };
 
@@ -1061,6 +1061,11 @@ create_label_with_text('Hello WebScreen!');
             };
             document.getElementById('userInfo').textContent = JSON.stringify(userInfo, null, 2);
 
+            // Load available models (only if not expired)
+            if (!isExpired) {
+                await this.loadEmbedderModels();
+            }
+
             // Update status
             if (isExpired) {
                 statusDot.className = 'status-dot disconnected';
@@ -1233,6 +1238,107 @@ create_label_with_text('Hello WebScreen!');
             return {
                 message: data.choices?.[0]?.message?.content || 'No response'
             };
+        }
+    }
+
+    async loadEmbedderModels() {
+        try {
+            console.log('[Embedder] Loading available models...');
+
+            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=get_models`);
+
+            if (!response.ok) {
+                throw new Error(`Failed to load models: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to load models');
+            }
+
+            const models = result.models;
+            console.log('[Embedder] Loaded models:', models);
+
+            // Populate model dropdown
+            const modelSelect = document.getElementById('embedderModel');
+            modelSelect.innerHTML = '';  // Clear existing options
+
+            // Group models by provider
+            const anthropicModels = models.filter(m => m.provider === 'anthropic' && m.status === 'enabled');
+            const openaiModels = models.filter(m => m.provider === 'openai' && m.status === 'enabled');
+
+            // Helper function to create readable model names
+            const formatModelName = (modelName) => {
+                // claude-sonnet-4-20250514 -> Claude Sonnet 4 (2025-05-14)
+                // claude-sonnet-4-5-20250929 -> Claude Sonnet 4.5 (2025-09-29)
+                // gpt-5-2025-08-07 -> GPT-5 (2025-08-07)
+
+                if (modelName.startsWith('claude-')) {
+                    const parts = modelName.replace('claude-', '').split('-');
+                    const variant = parts[0]; // sonnet, haiku, opus
+                    const version = parts.slice(1, -1).join('.'); // 4, 4.5, etc
+                    const date = parts[parts.length - 1]; // 20250514
+                    const formattedDate = `${date.substring(0,4)}-${date.substring(4,6)}-${date.substring(6,8)}`;
+                    return `Claude ${variant.charAt(0).toUpperCase() + variant.slice(1)} ${version} (${formattedDate})`;
+                } else if (modelName.startsWith('gpt-')) {
+                    const parts = modelName.split('-');
+                    const version = parts[1]; // 4o, 5, etc
+                    const date = parts[2]; // 20250807
+                    if (date) {
+                        const formattedDate = `${date.substring(0,4)}-${date.substring(4,6)}-${date.substring(6,8)}`;
+                        return `GPT-${version} (${formattedDate})`;
+                    }
+                    return `GPT-${version}`;
+                }
+                return modelName;
+            };
+
+            // Add Anthropic models
+            if (anthropicModels.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = 'Anthropic';
+                anthropicModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = formatModelName(model.name);
+                    optgroup.appendChild(option);
+                });
+                modelSelect.appendChild(optgroup);
+            }
+
+            // Add OpenAI models
+            if (openaiModels.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = 'OpenAI';
+                openaiModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = formatModelName(model.name);
+                    optgroup.appendChild(option);
+                });
+                modelSelect.appendChild(optgroup);
+            }
+
+            // Set default to first model if current selection is invalid
+            if (models.length > 0) {
+                const currentModel = this.embedderSettings.model;
+                const modelExists = models.some(m => m.name === currentModel);
+                if (!modelExists) {
+                    this.embedderSettings.model = models[0].name;
+                    modelSelect.value = models[0].name;
+                    console.log('[Embedder] Default model set to:', models[0].name);
+                } else {
+                    modelSelect.value = currentModel;
+                }
+            }
+
+            console.log('[Embedder] Models loaded and dropdown populated');
+
+        } catch (error) {
+            console.error('[Embedder] Error loading models:', error);
+            // Keep hardcoded defaults if API fails
+            this.updateEmbedderStatus('Could not load models. Using defaults.', 'warning');
         }
     }
 
