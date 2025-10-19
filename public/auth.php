@@ -602,7 +602,9 @@ function proxyAPI() {
         ];
 
         // Headers added in useEffect (conditional in CLI, always present for web)
-        $headers[] = 'x-session-id: ' . $_SESSION['embedder_session_uuid'];
+        // Note: x-session-id should only be sent if we have a valid session from Embedder
+        // For now, DON'T send it - let Embedder create one if needed
+        // $headers[] = 'x-session-id: ' . $_SESSION['embedder_session_uuid'];
         $headers[] = 'authorization: Bearer ' . $credentials['accessToken'];  // lowercase for HTTP/2
         $headers[] = 'x-agent-mode: act';
 
