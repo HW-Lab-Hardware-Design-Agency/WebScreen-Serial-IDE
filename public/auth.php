@@ -94,6 +94,39 @@ function parseJWT($token) {
 }
 
 /**
+ * Parse Server-Sent Events (SSE) stream from Anthropic API
+ */
+function parseSSEStream($sseData) {
+    $lines = explode("\n", $sseData);
+    $fullText = '';
+
+    foreach ($lines as $line) {
+        // SSE format: "data: {json}"
+        if (strpos($line, 'data: ') === 0) {
+            $jsonStr = substr($line, 6); // Remove "data: " prefix
+            $eventData = json_decode($jsonStr, true);
+
+            // Extract text from content_block_delta events
+            if (isset($eventData['type']) &&
+                $eventData['type'] === 'content_block_delta' &&
+                isset($eventData['delta']['text'])) {
+                $fullText .= $eventData['delta']['text'];
+            }
+        }
+    }
+
+    // Return in Anthropic API format
+    return [
+        'content' => [
+            [
+                'type' => 'text',
+                'text' => $fullText
+            ]
+        ]
+    ];
+}
+
+/**
  * Validate JWT token
  */
 function validateToken($token) {
@@ -688,9 +721,18 @@ function proxyAPI() {
 
         error_log('[Proxy] API Response received successfully');
 
+        // Check if response is SSE stream (Anthropic streaming response)
+        $responseData = $response['data'];
+        if (is_string($responseData) && strpos($responseData, 'event: ') === 0) {
+            // Parse SSE stream to extract the full message
+            error_log('[Proxy] Detected SSE stream, parsing...');
+            $responseData = parseSSEStream($responseData);
+            error_log('[Proxy] Parsed SSE stream, text length: ' . strlen($responseData['content'][0]['text']));
+        }
+
         return [
             'success' => true,
-            'data' => $response['data']
+            'data' => $responseData
         ];
     } catch (Exception $e) {
         error_log('[Proxy] API Error: ' . $e->getMessage());
