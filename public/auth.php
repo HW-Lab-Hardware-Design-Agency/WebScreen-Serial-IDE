@@ -565,17 +565,33 @@ function proxyAPI() {
 
         error_log('[Proxy] API Request to: ' . $proxyUrl . $endpoint);
 
+        // Generate a UUID v4 for session ID if not stored
+        if (!isset($_SESSION['embedder_session_uuid'])) {
+            $_SESSION['embedder_session_uuid'] = sprintf(
+                '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff) | 0x4000,
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            );
+        }
+
         // Build headers matching Embedder CLI implementation
         $headers = [
             'Authorization: Bearer ' . $credentials['accessToken'],
             'User-Agent: webscreen-serial-ide/1.0.0',
-            'x-client-type: web'
+            'x-client-type: web',
+            'x-session-id: ' . $_SESSION['embedder_session_uuid'],
+            'x-agent-mode: act',
+            'x-platform-type: web',
+            'x-sandbox-type: none',
+            'x-folder-type: non-versioned',
+            'x-working-directory: /',
+            'x-project-type: unknown',
+            'x-has-git: false',
+            'x-context-timestamp: ' . time()
         ];
-
-        // Add session ID if available
-        if (session_id()) {
-            $headers[] = 'x-session-id: ' . session_id();
-        }
 
         // Make request to Embedder backend
         $response = makeRequest(
