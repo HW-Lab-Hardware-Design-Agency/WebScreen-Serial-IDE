@@ -94,6 +94,39 @@ function parseJWT($token) {
 }
 
 /**
+ * Parse Server-Sent Events (SSE) stream from Anthropic API
+ */
+function parseSSEStream($sseData) {
+    $lines = explode("\n", $sseData);
+    $fullText = '';
+
+    foreach ($lines as $line) {
+        // SSE format: "data: {json}"
+        if (strpos($line, 'data: ') === 0) {
+            $jsonStr = substr($line, 6); // Remove "data: " prefix
+            $eventData = json_decode($jsonStr, true);
+
+            // Extract text from content_block_delta events
+            if (isset($eventData['type']) &&
+                $eventData['type'] === 'content_block_delta' &&
+                isset($eventData['delta']['text'])) {
+                $fullText .= $eventData['delta']['text'];
+            }
+        }
+    }
+
+    // Return in Anthropic API format
+    return [
+        'content' => [
+            [
+                'type' => 'text',
+                'text' => $fullText
+            ]
+        ]
+    ];
+}
+
+/**
  * Validate JWT token
  */
 function validateToken($token) {
@@ -129,6 +162,8 @@ function validateToken($token) {
  */
 function startDeviceCode() {
     try {
+        error_log('[Auth] Starting device code authentication...');
+
         $response = makeRequest(
             EMBEDDER_CONFIG['backendUrl'] . '/api/v1/auth/device/start',
             'POST',
@@ -136,17 +171,21 @@ function startDeviceCode() {
         );
 
         if ($response['status'] !== 200) {
+            error_log('[Auth] Device code start failed: ' . $response['status']);
             throw new Exception('Failed to start device auth: ' . $response['status']);
         }
 
         // Store device code data in session
         $_SESSION['device_code_data'] = $response['data'];
 
+        error_log('[Auth] Device code started: ' . $response['data']['userCode']);
+
         return [
             'success' => true,
             'data' => $response['data']
         ];
     } catch (Exception $e) {
+        error_log('[Auth] Device code start error: ' . $e->getMessage());
         return [
             'success' => false,
             'error' => $e->getMessage()
@@ -175,11 +214,42 @@ function pollDeviceCode() {
             throw new Exception('Polling failed: ' . $response['status']);
         }
 
+        $data = $response['data'];
+
+        // If authorized, automatically exchange the token
+        if (isset($data['accessToken']) && $data['status'] === 'authorized') {
+            error_log('[Auth] Device authorized! Exchanging token...');
+
+            // Exchange the custom token for Firebase credentials
+            $exchangeResult = exchangeToken($data['accessToken']);
+
+            if (!$exchangeResult['success']) {
+                throw new Exception('Token exchange failed: ' . $exchangeResult['error']);
+            }
+
+            error_log('[Auth] Token exchanged successfully, credentials stored in session');
+
+            // Clear device code data
+            unset($_SESSION['device_code_data']);
+
+            // Return success with credentials indicator
+            return [
+                'success' => true,
+                'data' => [
+                    'status' => 'authorized',
+                    'accessToken' => true,  // Indicate token was exchanged
+                    'credentialsStored' => true
+                ]
+            ];
+        }
+
+        // Return the raw response for other statuses
         return [
             'success' => true,
-            'data' => $response['data']
+            'data' => $data
         ];
     } catch (Exception $e) {
+        error_log('[Auth] Poll error: ' . $e->getMessage());
         return [
             'success' => false,
             'error' => $e->getMessage()
@@ -212,15 +282,40 @@ function exchangeToken($customToken) {
 
         $data = $response['data'];
 
-        // Extract expiry from JWT payload
+        // Parse JWT to extract user info and expiry
         $expiresAt = time() + 3600; // Default 1 hour
+        $userEmail = null;
+        $userName = null;
+        $userPicture = null;
+        $userId = null;
+
         try {
             $payload = parseJWT($data['idToken']);
+
+            // Extract expiry
             if (isset($payload['exp'])) {
                 $expiresAt = $payload['exp'];
             }
+
+            // Extract user info from JWT payload
+            if (isset($payload['user_id'])) {
+                $userId = $payload['user_id'];
+            } elseif (isset($payload['sub'])) {
+                $userId = $payload['sub'];
+            }
+            if (isset($payload['email'])) {
+                $userEmail = $payload['email'];
+            }
+            if (isset($payload['name'])) {
+                $userName = $payload['name'];
+            }
+            if (isset($payload['picture'])) {
+                $userPicture = $payload['picture'];
+            }
+
+            error_log('[Auth] Extracted user from JWT: ' . $userEmail . ' (' . $userName . ') UID: ' . $userId);
         } catch (Exception $e) {
-            error_log('[Auth] Could not parse token expiry: ' . $e->getMessage());
+            error_log('[Auth] Could not parse JWT: ' . $e->getMessage());
         }
 
         // Store credentials in session
@@ -230,14 +325,39 @@ function exchangeToken($customToken) {
             'refreshToken' => $data['refreshToken'],
             'expiresAt' => $expiresAt * 1000, // Milliseconds for JS
             'user' => [
-                'uid' => $data['localId'],
-                'email' => isset($data['email']) ? $data['email'] : null,
-                'displayName' => isset($data['displayName']) ? $data['displayName'] : null
+                'uid' => $userId,
+                'email' => $userEmail,
+                'displayName' => $userName,
+                'picture' => $userPicture
             ],
             'timestamp' => time() * 1000
         ];
 
         $_SESSION['embedder_credentials'] = $credentials;
+
+        // Create an Embedder session (like CLI does in line 95-96)
+        try {
+            $sessionResponse = makeRequest(
+                EMBEDDER_CONFIG['backendUrl'] . '/api/v1/sessions',
+                'POST',
+                [],
+                [
+                    'Authorization: Bearer ' . $data['idToken'],
+                    'Content-Type: application/json',
+                    'User-Agent: webscreen-serial-ide/1.0.0'
+                ]
+            );
+
+            if ($sessionResponse['status'] === 200 && isset($sessionResponse['data']['id'])) {
+                $_SESSION['embedder_session_id'] = $sessionResponse['data']['id'];
+                error_log('[Auth] Created Embedder session: ' . $_SESSION['embedder_session_id']);
+            } else {
+                error_log('[Auth] Failed to create session: ' . json_encode($sessionResponse));
+            }
+        } catch (Exception $e) {
+            error_log('[Auth] Error creating session: ' . $e->getMessage());
+            // Continue even if session creation fails - it's not critical for auth
+        }
 
         return [
             'success' => true,
@@ -289,12 +409,40 @@ function refreshToken() {
 
         $data = json_decode($response, true);
 
-        // Extract expiry
+        // Parse JWT to extract user info and expiry
         $expiresIn = isset($data['expires_in'])
             ? (is_string($data['expires_in']) ? intval($data['expires_in']) : $data['expires_in'])
             : 3600;
 
         $expiresAt = time() + $expiresIn;
+
+        // Extract user info from refreshed JWT token
+        $userEmail = null;
+        $userName = null;
+        $userPicture = null;
+        $userId = null;
+
+        try {
+            $payload = parseJWT($data['id_token']);
+
+            // Extract user info from JWT payload
+            if (isset($payload['user_id'])) {
+                $userId = $payload['user_id'];
+            } elseif (isset($payload['sub'])) {
+                $userId = $payload['sub'];
+            }
+            if (isset($payload['email'])) {
+                $userEmail = $payload['email'];
+            }
+            if (isset($payload['name'])) {
+                $userName = $payload['name'];
+            }
+            if (isset($payload['picture'])) {
+                $userPicture = $payload['picture'];
+            }
+        } catch (Exception $e) {
+            error_log('[Auth] Could not parse refreshed JWT: ' . $e->getMessage());
+        }
 
         // Update credentials
         $_SESSION['embedder_credentials']['accessToken'] = $data['id_token'];
@@ -304,6 +452,14 @@ function refreshToken() {
             : $refreshToken;
         $_SESSION['embedder_credentials']['expiresAt'] = $expiresAt * 1000;
         $_SESSION['embedder_credentials']['timestamp'] = time() * 1000;
+
+        // Update user info from refreshed token
+        if ($userId || $userEmail || $userName || $userPicture) {
+            $_SESSION['embedder_credentials']['user']['uid'] = $userId;
+            $_SESSION['embedder_credentials']['user']['email'] = $userEmail;
+            $_SESSION['embedder_credentials']['user']['displayName'] = $userName;
+            $_SESSION['embedder_credentials']['user']['picture'] = $userPicture;
+        }
 
         return [
             'success' => true,
@@ -358,6 +514,8 @@ function getCredentials() {
 function logout() {
     unset($_SESSION['embedder_credentials']);
     unset($_SESSION['device_code_data']);
+    unset($_SESSION['embedder_session_id']);
+    unset($_SESSION['embedder_project_id']);
 
     return [
         'success' => true,
@@ -406,6 +564,233 @@ function handleCallback() {
     ];
 }
 
+/**
+ * Proxy API requests to Embedder backend
+ * Bypasses CORS restrictions by making server-to-server requests
+ */
+function proxyAPI() {
+    try {
+        // Check authentication
+        if (!isset($_SESSION['embedder_credentials'])) {
+            throw new Exception('Not authenticated');
+        }
+
+        $credentials = $_SESSION['embedder_credentials'];
+
+        // Validate token
+        if (!validateToken($credentials['accessToken'])) {
+            throw new Exception('Token invalid or expired');
+        }
+
+        // Get request body
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        if (!$input || !isset($input['model']) || !isset($input['messages'])) {
+            throw new Exception('Invalid request: model and messages required');
+        }
+
+        $model = $input['model'];
+        $messages = $input['messages'];
+        $temperature = isset($input['temperature']) ? $input['temperature'] : 0.7;
+        $maxTokens = isset($input['max_tokens']) ? $input['max_tokens'] : 4096;
+
+        // Determine which proxy to use based on model
+        $proxyUrl = '';
+        $endpoint = '';
+        $requestBody = [];
+
+        if (strpos($model, 'claude-') === 0) {
+            // Anthropic models
+            $proxyUrl = EMBEDDER_CONFIG['backendUrl'] . '/api/v1/proxy/anthropic/';
+            $endpoint = 'messages';
+            $requestBody = [
+                'model' => $model,
+                'messages' => $messages,
+                'max_tokens' => $maxTokens,
+                'temperature' => $temperature
+            ];
+        } elseif (strpos($model, 'gpt-') === 0) {
+            // OpenAI models
+            $proxyUrl = EMBEDDER_CONFIG['backendUrl'] . '/api/v1/proxy/openai/';
+            $endpoint = 'v1/chat/completions';
+            $requestBody = [
+                'model' => $model,
+                'messages' => $messages,
+                'temperature' => $temperature
+            ];
+        } else {
+            throw new Exception('Unsupported model: ' . $model);
+        }
+
+        error_log('[Proxy] API Request to: ' . $proxyUrl . $endpoint);
+
+        // Generate a UUID v4 for session ID if not stored
+        if (!isset($_SESSION['embedder_session_uuid'])) {
+            $_SESSION['embedder_session_uuid'] = sprintf(
+                '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff) | 0x4000,
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            );
+        }
+
+        // Build headers matching Embedder CLI implementation
+        // x-platform-type must be one of: win32, linux, darwin
+        // x-folder-type must be one of: versioned, unversioned
+
+        // Generate project ID if not exists
+        if (!isset($_SESSION['embedder_project_id'])) {
+            $_SESSION['embedder_project_id'] = sprintf(
+                '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff) | 0x4000,
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            );
+        }
+
+        // Base headers (always present in CLI) - MATCHING CLI EXACTLY
+        $headers = [
+            'x-platform-type: linux',
+            'x-sandbox-type: none',
+            'x-folder-type: versioned',  // CLI uses 'versioned' not 'unversioned'
+            'x-client-type: web',
+        ];
+
+        // Headers added in useEffect (conditional in CLI, always present for web)
+        // Use the session ID created during authentication
+        if (isset($_SESSION['embedder_session_id'])) {
+            $headers[] = 'x-session-id: ' . $_SESSION['embedder_session_id'];
+        }
+        $headers[] = 'authorization: Bearer ' . $credentials['accessToken'];  // lowercase for HTTP/2
+        $headers[] = 'x-agent-mode: act';
+
+        // Context headers - MATCH CLI VALUES
+        $headers[] = 'x-working-directory: /';
+        $headers[] = 'x-project-type: git';  // CLI uses 'git' for git repos
+        $headers[] = 'x-has-git: true';  // CLI uses 'true' for git repos
+        $headers[] = 'x-context-timestamp: ' . (time() * 1000);  // Unix timestamp in milliseconds
+
+        // x-project-id - CLI sends actual UUID
+        $headers[] = 'x-project-id: ' . $_SESSION['embedder_project_id'];
+
+        // These headers are added by the provider clients in CLI
+        $headers[] = 'x-api-key: embedder-cli';
+        $headers[] = 'user-agent: ai-sdk/provider-utils/3.0.9 runtime/php/8';
+
+        // Add Anthropic-specific headers for Claude models
+        if (strpos($model, 'claude-') === 0) {
+            $headers[] = 'anthropic-version: 2023-06-01';
+        }
+
+        // Content-Type will be added by makeRequest() - force lowercase for HTTP/2
+        // Note: makeRequest adds 'Content-Type' but HTTP/2 normalizes to lowercase anyway
+
+        // Debug: Log all headers being sent
+        error_log('[Proxy] Sending headers: ' . json_encode($headers));
+        error_log('[Proxy] Request body: ' . json_encode($requestBody));
+
+        // Make request to Embedder backend
+        $response = makeRequest(
+            $proxyUrl . $endpoint,
+            'POST',
+            $requestBody,
+            $headers
+        );
+
+        if ($response['status'] !== 200) {
+            $errorMsg = 'API request failed: ' . $response['status'];
+
+            // Log full response for debugging
+            error_log('[Proxy] Error response status: ' . $response['status']);
+            error_log('[Proxy] Error response data: ' . json_encode($response['data']));
+            error_log('[Proxy] Error response raw: ' . $response['raw']);
+
+            if (isset($response['data']['error'])) {
+                $errorMsg .= ' - ' . json_encode($response['data']['error']);
+            } else if (isset($response['data'])) {
+                $errorMsg .= ' - ' . json_encode($response['data']);
+            } else {
+                $errorMsg .= ' - ' . $response['raw'];
+            }
+            throw new Exception($errorMsg);
+        }
+
+        error_log('[Proxy] API Response received successfully');
+
+        // Check if response is SSE stream (Anthropic streaming response)
+        $responseData = $response['data'];
+        if (is_string($responseData) && strpos($responseData, 'event: ') === 0) {
+            // Parse SSE stream to extract the full message
+            error_log('[Proxy] Detected SSE stream, parsing...');
+            $responseData = parseSSEStream($responseData);
+            error_log('[Proxy] Parsed SSE stream, text length: ' . strlen($responseData['content'][0]['text']));
+        }
+
+        return [
+            'success' => true,
+            'data' => $responseData
+        ];
+    } catch (Exception $e) {
+        error_log('[Proxy] API Error: ' . $e->getMessage());
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
+/**
+ * Get available AI models from Embedder API
+ */
+function getModels() {
+    try {
+        // Check authentication
+        if (!isset($_SESSION['embedder_credentials'])) {
+            throw new Exception('Not authenticated');
+        }
+
+        $credentials = $_SESSION['embedder_credentials'];
+
+        // Validate token
+        if (!validateToken($credentials['accessToken'])) {
+            throw new Exception('Token invalid or expired');
+        }
+
+        // Call models endpoint
+        $url = EMBEDDER_CONFIG['backendUrl'] . '/api/v1/models';
+
+        $headers = [
+            'Authorization: Bearer ' . $credentials['accessToken'],
+            'Content-Type: application/json'
+        ];
+
+        error_log('[Models] Fetching models from: ' . $url);
+
+        $response = makeRequest($url, 'GET', [], $headers);
+
+        if ($response['status'] !== 200) {
+            throw new Exception('Failed to fetch models: ' . $response['status']);
+        }
+
+        error_log('[Models] Fetched ' . count($response['data']) . ' models');
+
+        return [
+            'success' => true,
+            'models' => $response['data']
+        ];
+    } catch (Exception $e) {
+        error_log('[Models] Error: ' . $e->getMessage());
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
 // Route requests based on action parameter
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
@@ -417,6 +802,18 @@ try {
 
         case 'poll_device_code':
             echo json_encode(pollDeviceCode());
+            break;
+
+        case 'debug_session':
+            // Debug endpoint to check session state
+            echo json_encode([
+                'success' => true,
+                'session_id' => session_id(),
+                'has_credentials' => isset($_SESSION['embedder_credentials']),
+                'has_device_code' => isset($_SESSION['device_code_data']),
+                'device_code' => isset($_SESSION['device_code_data']) ? $_SESSION['device_code_data']['userCode'] : null,
+                'authenticated' => isset($_SESSION['embedder_credentials']) && validateToken($_SESSION['embedder_credentials']['accessToken'])
+            ]);
             break;
 
         case 'exchange_token':
@@ -447,6 +844,58 @@ try {
             handleCallback();
             break;
 
+        case 'proxy_api':
+            echo json_encode(proxyAPI());
+            break;
+
+        case 'get_models':
+            echo json_encode(getModels());
+            break;
+
+        case 'debug_proxy_headers':
+            // Debug endpoint to see what headers would be sent
+            if (!isset($_SESSION['embedder_credentials'])) {
+                echo json_encode(['success' => false, 'error' => 'Not authenticated']);
+                break;
+            }
+
+            if (!isset($_SESSION['embedder_session_uuid'])) {
+                $_SESSION['embedder_session_uuid'] = sprintf(
+                    '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                    mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                    mt_rand(0, 0xffff),
+                    mt_rand(0, 0x0fff) | 0x4000,
+                    mt_rand(0, 0x3fff) | 0x8000,
+                    mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                );
+            }
+
+            $credentials = $_SESSION['embedder_credentials'];
+            $headers = [
+                'Authorization: Bearer ' . $credentials['accessToken'],
+                'User-Agent: webscreen-serial-ide/1.0.0',
+                'x-client-type: web',
+                'x-session-id: ' . $_SESSION['embedder_session_uuid'],
+                'x-agent-mode: act',
+                'x-platform-type: linux',
+                'x-sandbox-type: none',
+                'x-folder-type: unversioned',
+                'x-working-directory: /',
+                'x-project-type: web',
+                'x-project-id: ',
+                'x-has-git: false',
+                'x-context-timestamp: ' . time(),
+                'x-api-key: embedder-cli',
+                'anthropic-version: 2023-06-01'
+            ];
+
+            echo json_encode([
+                'success' => true,
+                'headers' => $headers,
+                'session_uuid' => $_SESSION['embedder_session_uuid']
+            ]);
+            break;
+
         default:
             http_response_code(400);
             echo json_encode([
@@ -459,7 +908,10 @@ try {
                     'refresh_token',
                     'get_credentials',
                     'logout',
-                    'callback'
+                    'callback',
+                    'proxy_api',
+                    'debug_session',
+                    'debug_proxy_headers'
                 ]
             ]);
     }

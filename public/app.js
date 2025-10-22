@@ -29,7 +29,7 @@ class WebScreenIDE {
 
         this.embedderConversation = [];
         this.embedderSettings = {
-            model: 'claude-4-5-sonnet',
+            model: 'claude-sonnet-4-20250514',
             temperature: 0.7
         };
 
@@ -177,32 +177,24 @@ create_label_with_text('Hello WebScreen!');
             this.currentFile = e.target.value;
         });
 
-        // Embedder authentication buttons
-        document.getElementById('loginBrowserBtn').addEventListener('click', () => {
-            this.startBrowserAuth();
-        });
-
         document.getElementById('loginDeviceCodeBtn').addEventListener('click', () => {
             this.startDeviceCodeAuth();
-        });
-
-        document.getElementById('cancelDeviceCode').addEventListener('click', () => {
-            this.cancelDeviceCodeAuth();
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             this.embedderLogout();
         });
 
-        document.getElementById('refreshTokenBtn').addEventListener('click', () => {
-            this.embedderRefreshToken();
+        document.getElementById('closeAuthModal').addEventListener('click', () => {
+            this.closeAuthModal();
         });
 
-        document.getElementById('submitManualToken').addEventListener('click', () => {
-            this.submitManualToken();
+        document.getElementById('authModal').addEventListener('click', (e) => {
+            if (e.target.id === 'authModal') {
+                this.closeAuthModal();
+            }
         });
 
-        // Embedder chat
         document.getElementById('sendEmbedderMessage').addEventListener('click', () => {
             this.sendEmbedderMessage();
         });
@@ -222,14 +214,8 @@ create_label_with_text('Hello WebScreen!');
             this.clearEmbedderConversation();
         });
 
-        // Embedder settings
         document.getElementById('embedderModel').addEventListener('change', (e) => {
             this.embedderSettings.model = e.target.value;
-        });
-
-        document.getElementById('embedderTemp').addEventListener('input', (e) => {
-            this.embedderSettings.temperature = parseFloat(e.target.value);
-            document.getElementById('embedderTempValue').textContent = e.target.value;
         });
 
         // Embedder quick actions
@@ -586,13 +572,10 @@ create_label_with_text('Hello WebScreen!');
         await this.loadEmbedderCredentials();
 
         // Update UI
-        this.updateEmbedderUI();
+        await this.updateEmbedderUI();
 
-        // Auto-refresh embedder UI every second to update token expiration
-        setInterval(async () => {
-            await this.loadEmbedderCredentials();
-            this.updateEmbedderUI();
-        }, 1000);
+        // No auto-refresh to prevent excessive requests to auth.php
+        // UI will update when authentication state changes (login, logout, refresh)
     }
 
 
@@ -654,7 +637,7 @@ create_label_with_text('Hello WebScreen!');
             console.log('[Embedder] Saving credentials...');
             this.saveEmbedderCredentials(credentials);
             this.updateEmbedderStatus('Authentication successful! You can now chat with Embedder.', 'success');
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
             console.log('[Embedder] Authentication complete!');
 
         } catch (error) {
@@ -707,36 +690,11 @@ create_label_with_text('Hello WebScreen!');
         }
     }
 
-    startBrowserAuth() {
-        // Browser-based OAuth callback flow via PHP backend
-        // PHP handles token exchange and session management
-
-        const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
-        const callbackUrl = baseUrl + this.embedderConfig.phpAuthUrl + '?action=callback';
-
-        // Build Embedder auth URL
-        const authUrl = new URL(this.embedderConfig.authUrl);
-        authUrl.searchParams.set('callback', callbackUrl);
-        authUrl.searchParams.set('source', 'webscreen-ide');
-
-        console.log('[Embedder] Starting browser OAuth flow...');
-        console.log('[Embedder] Callback URL:', callbackUrl);
-        console.log('[Embedder] Auth URL:', authUrl.toString());
-
-        this.updateEmbedderStatus('Redirecting to Embedder...', 'info');
-
-        // Redirect to Embedder auth page
-        // Embedder will redirect to PHP callback which handles token exchange
-        window.location.href = authUrl.toString();
-    }
-
     async startDeviceCodeAuth() {
-        // Device code flow via PHP backend (no CORS issues!)
         console.log('[Embedder] Starting device code flow...');
         this.updateEmbedderStatus('Starting device code authentication...', 'info');
 
         try {
-            // Step 1: Request device code from PHP backend
             const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=start_device_code`);
 
             if (!response.ok) {
@@ -754,10 +712,8 @@ create_label_with_text('Hello WebScreen!');
 
             console.log('[Embedder] Device code received:', { userCode, verificationUri });
 
-            // Show device code UI
             this.showDeviceCodeUI(userCode, verificationUri);
 
-            // Step 2: Start polling for authorization
             const expiresAt = Date.now() + (expiresIn * 1000);
             this.startDeviceCodePolling(userCode, expiresAt);
 
@@ -768,30 +724,27 @@ create_label_with_text('Hello WebScreen!');
     }
 
     showDeviceCodeUI(userCode, verificationUri) {
-        // Hide auth method selection
-        document.getElementById('authMethodSelection').classList.add('hidden');
+        document.getElementById('modalDeviceCodeValue').textContent = userCode;
+        document.getElementById('modalVerificationUrl').textContent = verificationUri;
+        document.getElementById('modalVerificationUrl').href = verificationUri;
 
-        // Show device code display
-        const deviceCodeDisplay = document.getElementById('deviceCodeDisplay');
-        deviceCodeDisplay.classList.remove('hidden');
+        document.getElementById('authModal').classList.add('show');
 
-        // Set the code and URL
-        document.getElementById('deviceCodeValue').textContent = userCode;
-        document.getElementById('verificationUrl').textContent = verificationUri;
-        document.getElementById('verificationUrl').href = verificationUri;
-
-        // Open verification URL in new tab
         window.open(verificationUri, '_blank');
 
-        this.updateEmbedderStatus('Enter the code shown above at the verification URL', 'info');
+        this.updateEmbedderStatus('Waiting for authentication...', 'info');
+    }
+
+    closeAuthModal() {
+        document.getElementById('authModal').classList.remove('show');
+        this.cancelDeviceCodeAuth();
     }
 
     startDeviceCodePolling(userCode, expiresAt) {
-        const POLL_INTERVAL = 3000; // 3 seconds, same as CLI
+        const POLL_INTERVAL = 3000;
 
         const poll = async () => {
             try {
-                // Check if expired
                 if (Date.now() > expiresAt) {
                     console.log('[Embedder] Device code expired, restarting...');
                     this.cancelDeviceCodeAuth();
@@ -799,10 +752,6 @@ create_label_with_text('Hello WebScreen!');
                     return;
                 }
 
-                // Update status
-                document.getElementById('deviceCodeStatus').textContent = 'Waiting for activation...';
-
-                // Poll for token via PHP backend
                 const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=poll_device_code`);
 
                 if (!response.ok) {
@@ -816,30 +765,38 @@ create_label_with_text('Hello WebScreen!');
                 }
 
                 const data = result.data;
-                console.log('[Embedder] Poll response:', data.status);
+                console.log('[Embedder] Poll response:', JSON.stringify(data));
 
-                if (data.accessToken && data.status === 'authorized') {
-                    // Success! PHP backend has already exchanged the token
-                    console.log('[Embedder] Device authorized!');
-                    this.cancelDeviceCodeAuth(); // Stop polling
+                if (data.status === 'authorized' && (data.accessToken || data.credentialsStored)) {
+                    console.log('[Embedder] Device authorized! Token exchanged by PHP backend.');
+                    this.cancelDeviceCodeAuth();
+
                     this.updateEmbedderStatus('Device authorized! Loading credentials...', 'success');
 
-                    // Load credentials from PHP session
-                    await this.loadEmbedderCredentials();
-                    this.updateEmbedderUI();
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    const credentials = await this.loadEmbedderCredentials();
+
+                    if (credentials && credentials.accessToken) {
+                        console.log('[Embedder] Credentials loaded successfully!');
+                        this.updateEmbedderStatus('Authentication complete!', 'success');
+                        await this.updateEmbedderUI();
+                    } else {
+                        console.error('[Embedder] Failed to load credentials after authorization');
+                        this.updateEmbedderStatus('Authorization succeeded but failed to load credentials. Please refresh the page.', 'error');
+                    }
 
                 } else if (data.status === 'authorization_pending') {
-                    // Keep polling
+                    console.log('[Embedder] Still waiting for user to authorize...');
                     this.deviceCodePolling = setTimeout(poll, POLL_INTERVAL);
 
                 } else if (data.status === 'code_not_found') {
-                    // Code not found, restart flow
                     console.log('[Embedder] Code not found, restarting...');
                     this.cancelDeviceCodeAuth();
                     this.startDeviceCodeAuth();
 
                 } else {
-                    // Unknown status
+                    console.error('[Embedder] Unknown poll status:', data);
                     throw new Error(data.status || 'Unknown error occurred');
                 }
 
@@ -850,100 +807,20 @@ create_label_with_text('Hello WebScreen!');
             }
         };
 
-        // Start polling
         poll();
     }
 
     cancelDeviceCodeAuth() {
-        // Stop polling
         if (this.deviceCodePolling) {
             clearTimeout(this.deviceCodePolling);
             this.deviceCodePolling = null;
         }
 
-        // Clear device code data
         this.deviceCodeData = null;
 
-        // Hide device code display
-        document.getElementById('deviceCodeDisplay').classList.add('hidden');
-
-        // Show auth method selection again
-        document.getElementById('authMethodSelection').classList.remove('hidden');
+        document.getElementById('authModal').classList.remove('show');
 
         console.log('[Embedder] Device code authentication cancelled');
-    }
-
-    async submitManualToken() {
-        const input = document.getElementById('manualTokenInput');
-        const token = input.value.trim();
-
-        if (!token) {
-            this.updateEmbedderStatus('Please enter a token', 'error');
-            return;
-        }
-
-        console.log('[Embedder] Manual token submitted');
-        this.updateEmbedderStatus('Processing token...', 'info');
-
-        try {
-            // Exchange token via PHP backend
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=exchange_token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ token })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Token exchange failed: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Token exchange failed');
-            }
-
-            input.value = '';  // Clear input after successful submission
-            this.updateEmbedderStatus('Authentication successful!', 'success');
-
-            // Load credentials from PHP session
-            await this.loadEmbedderCredentials();
-            this.updateEmbedderUI();
-
-        } catch (error) {
-            console.error('[Embedder] Manual token error:', error);
-            this.updateEmbedderStatus(`Token exchange failed: ${error.message}`, 'error');
-        }
-    }
-
-    async embedderRefreshToken() {
-        this.updateEmbedderStatus('Refreshing token...', 'info');
-
-        try {
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=refresh_token`);
-
-            if (!response.ok) {
-                throw new Error(`Token refresh failed: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Token refresh failed');
-            }
-
-            this.updateEmbedderStatus('Token refreshed successfully!', 'success');
-
-            // Load updated credentials from PHP session
-            await this.loadEmbedderCredentials();
-            this.updateEmbedderUI();
-
-        } catch (error) {
-            this.updateEmbedderStatus(`Token refresh failed: ${error.message}`, 'error');
-            console.error('[Embedder] Token refresh error:', error);
-        }
     }
 
     async embedderLogout() {
@@ -965,15 +842,14 @@ create_label_with_text('Hello WebScreen!');
 
             this.updateEmbedderStatus('Logged out successfully', 'info');
 
-            // Clear local credential cache
             this.credentials = null;
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
 
         } catch (error) {
             console.error('[Embedder] Logout error:', error);
             this.updateEmbedderStatus('Logged out (with error)', 'info');
             this.credentials = null;
-            this.updateEmbedderUI();
+            await this.updateEmbedderUI();
         }
     }
 
@@ -1010,43 +886,41 @@ create_label_with_text('Hello WebScreen!');
         }
     }
 
-    updateEmbedderUI() {
-        const credentials = this.credentials;  // Use cached credentials
+    async updateEmbedderUI() {
+        const credentials = this.credentials;
         const isAuthenticated = credentials && credentials.accessToken;
         const isExpired = credentials && Date.now() > credentials.expiresAt;
 
-        // Toggle auth method selection vs authenticated actions
+        console.log('[Embedder] UI Update - Authenticated:', isAuthenticated, 'Expired:', isExpired);
+
         document.getElementById('authMethodSelection').classList.toggle('hidden', isAuthenticated);
         document.getElementById('authenticatedActions').classList.toggle('hidden', !isAuthenticated);
-
-        // Toggle sections
         document.getElementById('userSection').classList.toggle('hidden', !isAuthenticated);
 
-        // Enable/disable chat controls
         const chatEnabled = isAuthenticated && !isExpired;
         document.getElementById('embedderInput').disabled = !chatEnabled;
         document.getElementById('sendEmbedderMessage').disabled = !chatEnabled;
         document.getElementById('sendCodeToEmbedder').disabled = !chatEnabled;
         document.getElementById('clearEmbedderChat').disabled = !chatEnabled;
 
-        // Enable/disable quick action buttons
         document.querySelectorAll('.embedder-quick-btn').forEach(btn => {
             btn.disabled = !chatEnabled;
         });
 
-        // Update status indicator
         const statusDot = document.getElementById('embedderStatusIndicator');
         const statusText = document.getElementById('embedderStatusText');
 
         if (isAuthenticated) {
-            // Display user info
             const userInfo = {
-                email: credentials.user?.email,
-                uid: credentials.user?.uid?.substring(0, 8) + '...'
+                email: credentials.user?.email || 'N/A',
+                uid: credentials.user?.uid ? credentials.user.uid.substring(0, 8) + '...' : 'N/A'
             };
             document.getElementById('userInfo').textContent = JSON.stringify(userInfo, null, 2);
 
-            // Update status
+            if (!isExpired) {
+                await this.loadEmbedderModels();
+            }
+
             if (isExpired) {
                 statusDot.className = 'status-dot disconnected';
                 statusText.textContent = 'Token expired';
@@ -1054,12 +928,18 @@ create_label_with_text('Hello WebScreen!');
             } else {
                 statusDot.className = 'status-dot connected';
                 statusText.textContent = 'Connected';
-                this.updateEmbedderStatus('Authenticated', 'success');
+                const currentStatus = document.getElementById('authStatus');
+                if (!currentStatus || currentStatus.textContent.includes('Not authenticated')) {
+                    this.updateEmbedderStatus('Authenticated', 'success');
+                }
             }
         } else {
             statusDot.className = 'status-dot disconnected';
             statusText.textContent = 'Not authenticated';
-            this.updateEmbedderStatus('Not authenticated', 'info');
+            const currentStatus = document.getElementById('authStatus');
+            if (!currentStatus || !currentStatus.textContent.includes('Processing')) {
+                this.updateEmbedderStatus('Not authenticated', 'info');
+            }
         }
     }
 
@@ -1108,9 +988,17 @@ create_label_with_text('Hello WebScreen!');
 
         if (!message) return;
 
-        const credentials = this.loadEmbedderCredentials();
-        if (!credentials || !credentials.accessToken) {
+        // Check cached credentials
+        if (!this.credentials || !this.credentials.accessToken) {
             alert('Please login with Embedder first');
+            this.updateEmbedderStatus('Not authenticated. Please login first.', 'error');
+            return;
+        }
+
+        // Check if token is expired
+        if (Date.now() > this.credentials.expiresAt) {
+            alert('Token expired. Please refresh or login again.');
+            this.updateEmbedderStatus('Token expired', 'error');
             return;
         }
 
@@ -1127,7 +1015,7 @@ create_label_with_text('Hello WebScreen!');
         this.showEmbedderTyping();
 
         try {
-            const response = await this.callEmbedderAPI(this.embedderConversation, credentials.accessToken);
+            const response = await this.callEmbedderAPI(this.embedderConversation, this.credentials.accessToken);
 
             // Remove typing indicator
             this.hideEmbedderTyping();
@@ -1157,55 +1045,41 @@ create_label_with_text('Hello WebScreen!');
     async callEmbedderAPI(messages, token) {
         const model = this.embedderSettings.model;
 
-        // Determine which proxy to use based on model
-        let proxyUrl, endpoint, requestBody, isAnthropic;
+        console.log('[Embedder] API Request via PHP proxy:', { model, messageCount: messages.length });
 
-        if (model.startsWith('claude-')) {
-            // Anthropic models
-            proxyUrl = this.embedderConfig.proxyAnthropicUrl;
-            endpoint = 'v1/messages';
-            isAnthropic = true;
-            requestBody = {
-                model: model,
-                messages: messages,
-                max_tokens: 4096,
-                temperature: this.embedderSettings.temperature
-            };
-        } else if (model.startsWith('gpt-')) {
-            // OpenAI models
-            proxyUrl = this.embedderConfig.proxyOpenAIUrl;
-            endpoint = 'v1/chat/completions';
-            isAnthropic = false;
-            requestBody = {
-                model: model,
-                messages: messages,
-                temperature: this.embedderSettings.temperature
-            };
-        } else {
-            throw new Error(`Unsupported model: ${model}`);
-        }
-
-        console.log('[Embedder] API Request:', { proxyUrl, endpoint, model });
-
-        const response = await fetch(proxyUrl + endpoint, {
+        // Call PHP proxy instead of Embedder API directly (bypasses CORS)
+        const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=proxy_api`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: model,
+                messages: messages,
+                temperature: this.embedderSettings.temperature,
+                max_tokens: 4096
+            })
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[Embedder] API Error Response:', errorText);
-            throw new Error(`API request failed: ${response.status} - ${errorText}`);
+            console.error('[Embedder] Proxy Error Response:', errorText);
+            throw new Error(`Proxy request failed: ${response.status} - ${errorText}`);
         }
 
-        const data = await response.json();
-        console.log('[Embedder] API Response:', data);
+        const result = await response.json();
+
+        if (!result.success) {
+            console.error('[Embedder] API Error:', result.error);
+            throw new Error(result.error || 'API request failed');
+        }
+
+        const data = result.data;
+        console.log('[Embedder] API Response received');
 
         // Parse response based on API type
+        const isAnthropic = model.startsWith('claude-');
+
         if (isAnthropic) {
             // Anthropic response format: { content: [{ type: "text", text: "..." }] }
             return {
@@ -1216,6 +1090,107 @@ create_label_with_text('Hello WebScreen!');
             return {
                 message: data.choices?.[0]?.message?.content || 'No response'
             };
+        }
+    }
+
+    async loadEmbedderModels() {
+        try {
+            console.log('[Embedder] Loading available models...');
+
+            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=get_models`);
+
+            if (!response.ok) {
+                throw new Error(`Failed to load models: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to load models');
+            }
+
+            const models = result.models;
+            console.log('[Embedder] Loaded models:', models);
+
+            // Populate model dropdown
+            const modelSelect = document.getElementById('embedderModel');
+            modelSelect.innerHTML = '';  // Clear existing options
+
+            // Group models by provider
+            const anthropicModels = models.filter(m => m.provider === 'anthropic' && m.status === 'enabled');
+            const openaiModels = models.filter(m => m.provider === 'openai' && m.status === 'enabled');
+
+            // Helper function to create readable model names
+            const formatModelName = (modelName) => {
+                // claude-sonnet-4-20250514 -> Claude Sonnet 4 (2025-05-14)
+                // claude-sonnet-4-5-20250929 -> Claude Sonnet 4.5 (2025-09-29)
+                // gpt-5-2025-08-07 -> GPT-5 (2025-08-07)
+
+                if (modelName.startsWith('claude-')) {
+                    const parts = modelName.replace('claude-', '').split('-');
+                    const variant = parts[0]; // sonnet, haiku, opus
+                    const version = parts.slice(1, -1).join('.'); // 4, 4.5, etc
+                    const date = parts[parts.length - 1]; // 20250514
+                    const formattedDate = `${date.substring(0,4)}-${date.substring(4,6)}-${date.substring(6,8)}`;
+                    return `Claude ${variant.charAt(0).toUpperCase() + variant.slice(1)} ${version} (${formattedDate})`;
+                } else if (modelName.startsWith('gpt-')) {
+                    const parts = modelName.split('-');
+                    const version = parts[1]; // 4o, 5, etc
+                    const date = parts[2]; // 20250807
+                    if (date) {
+                        const formattedDate = `${date.substring(0,4)}-${date.substring(4,6)}-${date.substring(6,8)}`;
+                        return `GPT-${version} (${formattedDate})`;
+                    }
+                    return `GPT-${version}`;
+                }
+                return modelName;
+            };
+
+            // Add Anthropic models
+            if (anthropicModels.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = 'Anthropic';
+                anthropicModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = formatModelName(model.name);
+                    optgroup.appendChild(option);
+                });
+                modelSelect.appendChild(optgroup);
+            }
+
+            // Add OpenAI models
+            if (openaiModels.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = 'OpenAI';
+                openaiModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = formatModelName(model.name);
+                    optgroup.appendChild(option);
+                });
+                modelSelect.appendChild(optgroup);
+            }
+
+            // Set default to first model if current selection is invalid
+            if (models.length > 0) {
+                const currentModel = this.embedderSettings.model;
+                const modelExists = models.some(m => m.name === currentModel);
+                if (!modelExists) {
+                    this.embedderSettings.model = models[0].name;
+                    modelSelect.value = models[0].name;
+                    console.log('[Embedder] Default model set to:', models[0].name);
+                } else {
+                    modelSelect.value = currentModel;
+                }
+            }
+
+            console.log('[Embedder] Models loaded and dropdown populated');
+
+        } catch (error) {
+            console.error('[Embedder] Error loading models:', error);
+            // Keep hardcoded defaults if API fails
+            this.updateEmbedderStatus('Could not load models. Using defaults.', 'warning');
         }
     }
 
@@ -1310,9 +1285,9 @@ create_label_with_text('Hello WebScreen!');
     }
 
     embedderQuickAction(prompt) {
-        const credentials = this.loadEmbedderCredentials();
-        if (!credentials || !credentials.accessToken) {
+        if (!this.credentials || !this.credentials.accessToken) {
             alert('Please login with Embedder first');
+            this.updateEmbedderStatus('Not authenticated. Please login first.', 'error');
             return;
         }
 
