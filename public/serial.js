@@ -164,9 +164,10 @@ class SerialManager {
         }
 
         try {
-            // Send write command
-            await this.sendCommand(`/write ${filename}`);
-            
+            // Send write command (for .js files, strips extension as device adds it)
+            const filenameWithoutExt = filename.replace(/\.js$/, '');
+            await this.sendCommand(`/write ${filenameWithoutExt}`);
+
             // Wait a bit for the device to be ready
             await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -180,12 +181,120 @@ class SerialManager {
 
             // Send END to finish
             await this.sendCommand('END');
-            
+
             return true;
         } catch (error) {
             console.error('File send failed:', error);
             throw error;
         }
+    }
+
+    async uploadFile(filename, content, onProgress = null) {
+        if (!this.isConnected) {
+            throw new Error('Device not connected');
+        }
+
+        // Determine if this is a text file or binary file
+        const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
+        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        const isTextFile = textExtensions.includes(ext);
+
+        let totalSize = 0;
+        let sentSize = 0;
+
+        try {
+            if (isTextFile) {
+                // Text mode
+                totalSize = content.length;
+                await this.sendCommand(`/upload ${filename}`);
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                const lines = content.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    await this.sendCommand(lines[i]);
+                    sentSize += lines[i].length + 1;
+                    if (onProgress) onProgress(sentSize, totalSize);
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                }
+            } else {
+                // Binary mode - base64
+                totalSize = typeof content === 'string' ? content.length : content.byteLength;
+                await this.sendCommand(`/upload ${filename} base64`);
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                let base64Content;
+                if (typeof content === 'string') {
+                    base64Content = btoa(unescape(encodeURIComponent(content)));
+                } else {
+                    base64Content = this.arrayBufferToBase64(content);
+                }
+
+                const chunkSize = 76;
+                for (let i = 0; i < base64Content.length; i += chunkSize) {
+                    const chunk = base64Content.substring(i, i + chunkSize);
+                    await this.sendCommand(chunk);
+                    sentSize = Math.min(Math.floor((i + chunkSize) * 3 / 4), totalSize);
+                    if (onProgress) onProgress(sentSize, totalSize);
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                }
+            }
+
+            await this.sendCommand('END');
+            if (onProgress) onProgress(totalSize, totalSize);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            return true;
+        } catch (error) {
+            console.error('Upload failed:', error);
+            throw error;
+        }
+    }
+
+    arrayBufferToBase64(buffer) {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
+    // Parse file listing from device output
+    parseFileListing(lines) {
+        const files = [];
+        for (const line of lines) {
+            // Pattern: DIR                dirname or FILE    size     filename
+            let match = line.match(/^(DIR|FILE)\s+(?:(\d+(?:\.\d+)?)\s*([BKBMBGB]+)\s+)?(.+)$/i);
+            if (match) {
+                const type = match[1].toLowerCase() === 'dir' ? 'dir' : 'file';
+                const sizeNum = match[2] ? parseFloat(match[2]) : 0;
+                const sizeUnit = match[3] ? match[3].toUpperCase() : 'B';
+                const name = match[4].trim();
+
+                let sizeBytes = sizeNum;
+                if (sizeUnit === 'KB' || sizeUnit === 'K') sizeBytes = sizeNum * 1024;
+                else if (sizeUnit === 'MB' || sizeUnit === 'M') sizeBytes = sizeNum * 1024 * 1024;
+                else if (sizeUnit === 'GB' || sizeUnit === 'G') sizeBytes = sizeNum * 1024 * 1024 * 1024;
+
+                if (name && name.length > 0) {
+                    files.push({ type, name, size: Math.round(sizeBytes) });
+                }
+                continue;
+            }
+
+            // Pattern: [FILE] filename (size bytes) or [DIR] dirname
+            match = line.match(/\[(FILE|DIR)\]\s+(.+?)(?:\s+\((\d+)\s*bytes?\))?$/i);
+            if (match) {
+                const name = match[2].trim();
+                if (name && !name.includes('listing') && !name.includes('===')) {
+                    files.push({
+                        type: match[1].toLowerCase(),
+                        name: name,
+                        size: match[3] ? parseInt(match[3]) : 0
+                    });
+                }
+            }
+        }
+        return files;
     }
 
     getPreviousCommand() {

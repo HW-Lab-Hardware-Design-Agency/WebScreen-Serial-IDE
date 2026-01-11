@@ -7,6 +7,12 @@ class WebScreenIDE {
         this.isMonitoring = false;
         this.currentTheme = 'retro';
 
+        // File browser state
+        this.currentPath = '/';
+        this.selectedFile = null;
+        this.fileListData = [];
+        this.fileListLines = [];
+
         // Embedder configuration (from official CLI package)
         this.embedderConfig = {
             authUrl: 'https://app.embedder.dev/',
@@ -164,13 +170,46 @@ create_label_with_text('Hello WebScreen!');
             this.refreshFileList();
         });
 
-        document.getElementById('downloadFile').addEventListener('click', () => {
-            this.downloadSelectedFile();
-        });
-
         document.getElementById('deleteFile').addEventListener('click', () => {
             this.deleteSelectedFile();
         });
+
+        // File upload
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        if (uploadBtn) {
+            uploadBtn.addEventListener('click', () => fileInput.click());
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    this.uploadFiles(e.target.files);
+                    e.target.value = '';
+                }
+            });
+        }
+
+        if (dropzone) {
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('dragover');
+            });
+
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('dragover');
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    this.uploadFiles(e.dataTransfer.files);
+                }
+            });
+        }
 
         // Filename input
         document.getElementById('filename').addEventListener('input', (e) => {
@@ -305,7 +344,6 @@ create_label_with_text('Hello WebScreen!');
         document.getElementById('saveBtn').disabled = !connected;
         document.getElementById('runBtn').disabled = !connected;
         document.getElementById('refreshFiles').disabled = !connected;
-        document.getElementById('downloadFile').disabled = !connected;
         document.getElementById('deleteFile').disabled = !connected;
         
         // Update terminal input
@@ -488,24 +526,289 @@ create_label_with_text('Hello WebScreen!');
 
         try {
             this.appendToTerminal('Refreshing file list...', 'log-info');
-            await this.serialManager.listFiles();
+            this.fileListLines = [];
+
+            // Temporarily capture file listing output
+            const originalHandler = this.serialManager.onDataReceived;
+            let collecting = false;
+
+            this.serialManager.onDataReceived = (line) => {
+                // Also pass to original handler for terminal display
+                if (originalHandler) originalHandler(line);
+
+                // Check for listing start
+                if (line.includes('Directory listing') || (line.includes('Type') && line.includes('Size') && line.includes('Name'))) {
+                    collecting = true;
+                    return;
+                }
+
+                // Skip separator lines
+                if (line.match(/^-+$/) || line.includes('--------------------------------')) {
+                    return;
+                }
+
+                // Check for listing end
+                if (line.includes('WebScreen>') || (line.includes('Total:') && line.includes('files'))) {
+                    collecting = false;
+                    return;
+                }
+
+                if (collecting && line.trim()) {
+                    this.fileListLines.push(line);
+                }
+            };
+
+            await this.serialManager.listFiles(this.currentPath);
+
+            // Wait a bit for response
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Restore original handler
+            this.serialManager.onDataReceived = originalHandler;
+
+            // Parse collected lines
+            this.fileListData = this.serialManager.parseFileListing(this.fileListLines);
+            this.renderFileList();
+
         } catch (error) {
             this.appendToTerminal(`File refresh failed: ${error.message}`, 'log-error');
         }
     }
 
-    downloadSelectedFile() {
-        // This would need to be implemented with file content retrieval
-        this.appendToTerminal('File download not yet implemented', 'log-warning');
+    renderFileList() {
+        const fileListEl = document.getElementById('fileList');
+        const currentPathEl = document.getElementById('currentPath');
+
+        if (currentPathEl) {
+            currentPathEl.textContent = this.currentPath;
+        }
+
+        if (this.fileListData.length === 0) {
+            fileListEl.innerHTML = '<p class="placeholder">No files found</p>';
+            return;
+        }
+
+        // Sort: directories first, then files
+        const sorted = [...this.fileListData].sort((a, b) => {
+            if (a.type === 'dir' && b.type !== 'dir') return -1;
+            if (a.type !== 'dir' && b.type === 'dir') return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        fileListEl.innerHTML = sorted.map(file => {
+            const icon = file.type === 'dir' ? 'fa-folder' : this.getFileIcon(file.name);
+            const iconClass = file.type === 'dir' ? 'folder' : '';
+            const size = file.type === 'file' ? this.formatBytes(file.size) : '';
+
+            return `
+                <div class="file-item" data-name="${file.name}" data-type="${file.type}">
+                    <i class="fas ${icon} file-icon ${iconClass}"></i>
+                    <span class="file-name">${file.name}</span>
+                    <span class="file-size">${size}</span>
+                </div>
+            `;
+        }).join('');
+
+        // Add click handlers
+        fileListEl.querySelectorAll('.file-item').forEach(item => {
+            item.addEventListener('click', () => {
+                // Toggle selection
+                fileListEl.querySelectorAll('.file-item').forEach(i => i.classList.remove('selected'));
+                item.classList.add('selected');
+                this.selectedFile = {
+                    name: item.dataset.name,
+                    type: item.dataset.type
+                };
+            });
+
+            item.addEventListener('dblclick', () => {
+                if (item.dataset.type === 'dir') {
+                    // Navigate into directory
+                    this.currentPath = this.currentPath + item.dataset.name + '/';
+                    this.refreshFileList();
+                } else {
+                    // Load file into editor
+                    this.loadFileIntoEditor(item.dataset.name);
+                }
+            });
+        });
     }
 
-    deleteSelectedFile() {
-        // This would need file selection implementation
-        this.appendToTerminal('File delete not yet implemented', 'log-warning');
+    getFileIcon(filename) {
+        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        const iconMap = {
+            '.js': 'fa-file-code',
+            '.json': 'fa-file-code',
+            '.txt': 'fa-file-alt',
+            '.md': 'fa-file-alt',
+            '.html': 'fa-file-code',
+            '.css': 'fa-file-code',
+            '.png': 'fa-file-image',
+            '.jpg': 'fa-file-image',
+            '.jpeg': 'fa-file-image',
+            '.gif': 'fa-file-image',
+            '.svg': 'fa-file-image'
+        };
+        return iconMap[ext] || 'fa-file';
+    }
+
+    async loadFileIntoEditor(filename) {
+        if (!this.serialManager.isConnected) return;
+
+        try {
+            this.appendToTerminal(`Loading ${filename}...`, 'log-info');
+            let content = '';
+            let collecting = false;
+
+            const originalHandler = this.serialManager.onDataReceived;
+            this.serialManager.onDataReceived = (line) => {
+                if (originalHandler) originalHandler(line);
+
+                if (line.includes(`--- ${this.currentPath}${filename}`) || line.includes('--- /')) {
+                    collecting = true;
+                    return;
+                }
+
+                if (line.includes('--- End of file ---') || line.includes('WebScreen>')) {
+                    collecting = false;
+                    return;
+                }
+
+                if (collecting) {
+                    content += line + '\n';
+                }
+            };
+
+            await this.serialManager.catFile(this.currentPath + filename);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            this.serialManager.onDataReceived = originalHandler;
+
+            if (content.trim()) {
+                this.codeEditor.setValue(content.trim());
+                document.getElementById('filename').value = filename;
+                this.currentFile = filename;
+                this.switchTab('editor');
+                this.appendToTerminal(`Loaded ${filename}`, 'log-info');
+            }
+        } catch (error) {
+            this.appendToTerminal(`Failed to load file: ${error.message}`, 'log-error');
+        }
+    }
+
+    async deleteSelectedFile() {
+        if (!this.serialManager.isConnected || !this.selectedFile) {
+            this.appendToTerminal('No file selected', 'log-warning');
+            return;
+        }
+
+        if (!confirm(`Delete ${this.selectedFile.name}?`)) return;
+
+        try {
+            const fullPath = this.currentPath + this.selectedFile.name;
+            await this.serialManager.deleteFile(fullPath);
+            this.appendToTerminal(`Deleted ${this.selectedFile.name}`, 'log-info');
+            this.selectedFile = null;
+            await this.refreshFileList();
+        } catch (error) {
+            this.appendToTerminal(`Delete failed: ${error.message}`, 'log-error');
+        }
+    }
+
+    async uploadFiles(files) {
+        if (!this.serialManager.isConnected) {
+            this.appendToTerminal('Device not connected', 'log-error');
+            return;
+        }
+
+        for (const file of files) {
+            try {
+                this.showUploadProgress(file.name, 0, file.size);
+
+                const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
+                const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+                const isTextFile = textExtensions.includes(ext);
+
+                const content = await this.readFileFromBrowser(file, !isTextFile);
+                const fullPath = this.currentPath + file.name;
+
+                this.appendToTerminal(`Uploading ${file.name}...`, 'log-info');
+
+                await this.serialManager.uploadFile(fullPath, content, (sent, total) => {
+                    this.updateUploadProgress(file.name, sent, total);
+                });
+
+                this.hideUploadProgress();
+                this.appendToTerminal(`Uploaded ${file.name}`, 'log-info');
+            } catch (error) {
+                this.hideUploadProgress();
+                this.appendToTerminal(`Upload failed: ${error.message}`, 'log-error');
+            }
+        }
+
+        await this.refreshFileList();
+    }
+
+    readFileFromBrowser(file, asBinary = false) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            if (asBinary) {
+                reader.readAsArrayBuffer(file);
+            } else {
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    showUploadProgress(filename, sent, total) {
+        const overlay = document.getElementById('uploadProgressOverlay');
+        const fileNameEl = document.getElementById('uploadFileName');
+        const progressBar = document.getElementById('uploadProgressBar');
+        const percentEl = document.getElementById('uploadProgressPercent');
+        const bytesEl = document.getElementById('uploadProgressBytes');
+
+        if (overlay) {
+            overlay.style.display = 'flex';
+            fileNameEl.textContent = `Uploading ${filename}...`;
+            progressBar.style.width = '0%';
+            percentEl.textContent = '0%';
+            bytesEl.textContent = `0 B / ${this.formatBytes(total)}`;
+        }
+    }
+
+    updateUploadProgress(filename, sent, total) {
+        const progressBar = document.getElementById('uploadProgressBar');
+        const percentEl = document.getElementById('uploadProgressPercent');
+        const bytesEl = document.getElementById('uploadProgressBytes');
+
+        if (progressBar) {
+            const percent = total > 0 ? Math.round((sent / total) * 100) : 0;
+            progressBar.style.width = `${percent}%`;
+            percentEl.textContent = `${percent}%`;
+            bytesEl.textContent = `${this.formatBytes(sent)} / ${this.formatBytes(total)}`;
+        }
+    }
+
+    hideUploadProgress() {
+        const overlay = document.getElementById('uploadProgressOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+
+    formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
     updateFileStatus(status) {
-        document.getElementById('fileStatus').textContent = status;
+        const el = document.getElementById('fileStatus');
+        if (el) el.textContent = status;
     }
 
     // Theme Management

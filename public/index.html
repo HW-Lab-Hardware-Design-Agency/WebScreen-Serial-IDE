@@ -7,6 +7,9 @@
     <meta name="description" content="Interactive development environment for WebScreen with serial commands and JavaScript editor">
     <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
     
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <!-- CodeMirror CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/dracula.min.css">
@@ -204,14 +207,52 @@
 
                 <!-- File Manager Tab -->
                 <div class="tab-content hidden" id="files-tab">
-                    <div class="file-manager">
-                        <div class="file-actions">
-                            <button id="refreshFiles" class="btn btn-sm">Refresh</button>
-                            <button id="downloadFile" class="btn btn-sm">Download</button>
-                            <button id="deleteFile" class="btn btn-sm btn-danger">Delete</button>
+                    <div class="file-manager-container">
+                        <!-- Upload Area -->
+                        <div class="upload-area">
+                            <div class="upload-dropzone" id="dropzone">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <h3>Drop files here to upload</h3>
+                                <p>or</p>
+                                <button class="btn btn-primary" id="uploadBtn">
+                                    <i class="fas fa-file-upload"></i> Browse Files
+                                </button>
+                                <input type="file" id="fileInput" multiple hidden>
+                            </div>
+                            <!-- Upload Progress Overlay -->
+                            <div class="upload-progress-overlay" id="uploadProgressOverlay" style="display: none;">
+                                <div class="upload-progress-content">
+                                    <i class="fas fa-file-upload fa-2x"></i>
+                                    <h3 id="uploadFileName">Uploading file...</h3>
+                                    <div class="upload-progress-bar-container">
+                                        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+                                    </div>
+                                    <div class="upload-progress-info">
+                                        <span id="uploadProgressPercent">0%</span>
+                                        <span id="uploadProgressBytes">0 B / 0 B</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div id="fileList" class="file-list">
-                            <p class="placeholder">Connect device to view files</p>
+
+                        <!-- File Browser -->
+                        <div class="file-browser">
+                            <div class="file-toolbar">
+                                <div class="breadcrumb">
+                                    <span id="currentPath">/</span>
+                                </div>
+                                <div class="file-actions">
+                                    <button class="btn-icon" id="refreshFiles" title="Refresh">
+                                        <i class="fas fa-sync"></i>
+                                    </button>
+                                    <button class="btn-icon" id="deleteFile" title="Delete Selected">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="fileList" class="file-list">
+                                <p class="placeholder">Connect device to view files</p>
+                            </div>
                         </div>
                     </div>
                 </div>
