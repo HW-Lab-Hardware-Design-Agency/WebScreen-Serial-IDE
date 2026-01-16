@@ -214,6 +214,7 @@ create_label_with_text('Hello WebScreen!');
         // Filename input
         document.getElementById('filename').addEventListener('input', (e) => {
             this.currentFile = e.target.value;
+            this.updateEditorMode(e.target.value);
         });
 
         document.getElementById('loginDeviceCodeBtn').addEventListener('click', () => {
@@ -473,12 +474,18 @@ create_label_with_text('Hello WebScreen!');
             return;
         }
 
+        // Ensure filename has path prefix
+        const fullPath = filename.startsWith('/') ? filename : '/' + filename;
+
         try {
             this.updateFileStatus('Saving...');
-            await this.serialManager.sendFile(filename, content);
-            this.appendToTerminal(`File saved: ${filename}`, 'log-success');
+            await this.serialManager.uploadFile(fullPath, content, (sent, total) => {
+                const percent = total > 0 ? Math.round((sent / total) * 100) : 0;
+                this.updateFileStatus(`Saving... ${percent}%`);
+            });
+            this.appendToTerminal(`File saved: ${fullPath}`, 'log-success');
             this.updateFileStatus('Saved');
-            
+
             // Refresh file list
             setTimeout(() => this.refreshFileList(), 1000);
         } catch (error) {
@@ -489,15 +496,24 @@ create_label_with_text('Hello WebScreen!');
 
     async runScript() {
         const filename = this.currentFile || document.getElementById('filename').value || 'script.js';
-        
+
+        // Only run .js files
+        if (!filename.endsWith('.js')) {
+            this.appendToTerminal('Can only run JavaScript (.js) files', 'log-warning');
+            return;
+        }
+
+        // Ensure filename has path prefix for loading
+        const fullPath = filename.startsWith('/') ? filename : '/' + filename;
+
         try {
             // Save first, then run
             await this.saveFile();
-            
+
             // Wait a bit for save to complete
             setTimeout(async () => {
-                await this.serialManager.loadScript(filename);
-                this.appendToTerminal(`Running script: ${filename}`, 'log-success');
+                await this.serialManager.loadScript(fullPath);
+                this.appendToTerminal(`Running script: ${fullPath}`, 'log-success');
             }, 1500);
         } catch (error) {
             this.appendToTerminal(`Run failed: ${error.message}`, 'log-error');
@@ -652,6 +668,28 @@ create_label_with_text('Hello WebScreen!');
         return iconMap[ext] || 'fa-file';
     }
 
+    getEditorMode(filename) {
+        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        const modeMap = {
+            '.js': 'javascript',
+            '.json': { name: 'javascript', json: true },
+            '.html': 'htmlmixed',
+            '.htm': 'htmlmixed',
+            '.css': 'css',
+            '.xml': 'xml',
+            '.svg': 'xml',
+            '.md': 'markdown',
+            '.txt': 'text/plain'
+        };
+        return modeMap[ext] || 'javascript';
+    }
+
+    updateEditorMode(filename) {
+        if (!this.codeEditor) return;
+        const mode = this.getEditorMode(filename);
+        this.codeEditor.setOption('mode', mode);
+    }
+
     async loadFileIntoEditor(filename) {
         if (!this.serialManager.isConnected) return;
 
@@ -688,6 +726,7 @@ create_label_with_text('Hello WebScreen!');
                 this.codeEditor.setValue(content.trim());
                 document.getElementById('filename').value = filename;
                 this.currentFile = filename;
+                this.updateEditorMode(filename);
                 this.switchTab('editor');
                 this.appendToTerminal(`Loaded ${filename}`, 'log-info');
             }

@@ -59,12 +59,12 @@
                 <div class="panel-header">
                     <div class="tabs">
                         <button class="tab" data-tab="console">Serial Console</button>
-                        <button class="tab active" data-tab="editor">JavaScript Editor</button>
+                        <button class="tab active" data-tab="editor">Code Editor</button>
                         <button class="tab" data-tab="embedder">Embedder</button>
                         <button class="tab" data-tab="files">File Manager</button>
                     </div>
                     <div class="editor-actions">
-                        <input type="text" id="filename" placeholder="script.js" class="filename-input">
+                        <input type="text" id="filename" placeholder="filename.js" class="filename-input" title="Enter filename with extension (e.g., script.js, config.json, style.css)">
                         <button id="saveBtn" class="btn btn-sm" title="Save to Device">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path>
@@ -420,6 +420,10 @@
     <!-- CodeMirror JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/markdown/markdown.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/comment/comment.min.js"></script>

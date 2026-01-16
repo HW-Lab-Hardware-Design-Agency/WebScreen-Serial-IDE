@@ -37,35 +37,35 @@
     --transition-smooth: all 0.3s ease;
 }
 
-/* Focus Theme - Dracula Official Colors */
+/* Focus Theme - Evangelion Unit-01 (evangelion.nvim) */
 [data-theme="focus"] {
-    /* Dracula Background Colors */
-    --bg-primary: #282a36;
-    --bg-secondary: #21222c;
-    --bg-panel: #1b1c21;
-    --bg-current-line: #1b1c21;
+    /* EVA-01 Background Colors (from evangelion.nvim) */
+    --bg-primary: #201430;         /* midnight - main bg */
+    --bg-secondary: #39274D;       /* balthasar - secondary bg */
+    --bg-panel: #402C56;           /* melchior - panel bg */
+    --bg-current-line: #39274C;    /* casper - current line */
     --bg-grid: none;
 
-    /* Dracula Primary Colors */
-    --color-primary: #bd93f9;      /* Purple */
-    --color-secondary: #ff79c6;    /* Pink */
-    --color-accent: #8be9fd;       /* Cyan */
-    --color-green: #50fa7b;        /* Green */
-    --color-orange: #ffb86c;       /* Orange */
-    --color-red: #ff5555;          /* Red */
-    --color-yellow: #f1fa8c;       /* Yellow */
-    --color-pink: #ff79c6;         /* Pink */
-    --color-cyan: #8be9fd;         /* Cyan */
-    --color-purple: #bd93f9;       /* Purple */
+    /* EVA-01 Primary Colors */
+    --color-primary: #B968FC;      /* atfield - bright purple */
+    --color-secondary: #87FF5F;    /* kaworu - neon green */
+    --color-accent: #D99145;       /* lcl - orange */
+    --color-green: #8EDF5F;        /* terminaldogma - lime green */
+    --color-orange: #D99145;       /* lcl - orange */
+    --color-red: #DB6088;          /* misato - pink/error */
+    --color-yellow: #E6BB85;       /* penpen - light orange */
+    --color-pink: #C586C0;         /* asuska - mauve */
+    --color-cyan: #A4D2EC;         /* adam - light cyan */
+    --color-purple: #875FAF;       /* unit01 - medium purple */
 
-    /* Dracula Text Colors */
-    --color-text: #f8f8f2;         /* Foreground */
-    --color-text-dim: #f8f8f2;
-    --color-text-muted: #6272a4;   /* Comment */
+    /* EVA-01 Text Colors */
+    --color-text: #E1D6F8;         /* rei - primary text */
+    --color-text-dim: #D4D4D4;     /* angel - secondary text */
+    --color-text-muted: #A1A0AD;   /* shinji - comments/muted */
 
-    /* Dracula Borders */
-    --border-primary: 1px solid #6272a4;
-    --border-secondary: 1px solid #1b1c21;
+    /* EVA-01 Borders */
+    --border-primary: 1px solid #B968FC;
+    --border-secondary: 1px solid #39274D;
     --border-radius: 4px;
 
     --shadow-glow: none;
@@ -130,6 +130,12 @@ body:not([data-theme="focus"]) {
     pointer-events: none;
 }
 
+[data-theme="focus"] .header {
+    background: linear-gradient(180deg, #201430 0%, #39274D 100%);
+    border-bottom: 2px solid #B968FC;
+    box-shadow: 0 4px 15px rgba(185, 104, 252, 0.3);
+}
+
 [data-theme="focus"] .header::before {
     display: none;
 }
@@ -169,6 +175,8 @@ body:not([data-theme="focus"]) {
     letter-spacing: 0;
     font-weight: 600;
     font-size: 24px;
+    color: #87FF5F;
+    text-shadow: 0 0 10px rgba(135, 255, 95, 0.5);
 }
 
 [data-theme="focus"] .header h1::before,
@@ -239,10 +247,11 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .status-badge.connected {
-    background: #50fa7b;
-    border: 1px solid #50fa7b;
+    background: #8EDF5F;
+    border: 1px solid #87FF5F;
     border-radius: var(--border-radius);
-    color: #282a36;
+    color: #201430;
+    box-shadow: 0 0 10px rgba(135, 255, 95, 0.5);
 }
 
 .status-badge.disconnected {
@@ -258,10 +267,10 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .status-badge.disconnected {
-    background: #ff5555;
-    border: 1px solid #ff5555;
-    color: #282a36;
-    box-shadow: none;
+    background: #DB6088;
+    border: 1px solid #DB6088;
+    color: #201430;
+    box-shadow: 0 0 10px rgba(219, 96, 136, 0.5);
     animation: none;
     border-radius: var(--border-radius);
 }
@@ -274,10 +283,10 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .status-badge.connecting {
-    background: #ffb86c;
-    border: 1px solid #ffb86c;
-    color: #282a36;
-    box-shadow: none;
+    background: #D99145;
+    border: 1px solid #D99145;
+    color: #201430;
+    box-shadow: 0 0 10px rgba(217, 145, 69, 0.5);
     border-radius: var(--border-radius);
 }
 
@@ -334,9 +343,10 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .btn:hover {
-    background: #1b1c21;
-    color: #bd93f9;
-    border-color: #bd93f9;
+    background: #39274D;
+    color: #87FF5F;
+    border-color: #87FF5F;
+    box-shadow: 0 0 8px rgba(135, 255, 95, 0.4);
 }
 
 .btn:hover {
@@ -360,40 +370,40 @@ body:not([data-theme="focus"]) {
     text-shadow: 0 0 5px #ffa500;
 }
 
-/* Focus theme button hover - Dracula colors */
+/* Focus theme button hover - evangelion.nvim colors */
 [data-theme="focus"] .btn:hover {
-    background: #1b1c21 !important;
-    border-color: #bd93f9 !important;
-    color: #bd93f9 !important;
+    background: #39274D !important;
+    border-color: #87FF5F !important;
+    color: #87FF5F !important;
     transform: none !important;
-    box-shadow: none !important;
+    box-shadow: 0 0 12px rgba(135, 255, 95, 0.5) !important;
     text-shadow: none !important;
 }
 
 [data-theme="focus"] .btn.btn-primary:hover {
-    background: #bd93f9 !important;
-    border-color: #bd93f9 !important;
-    color: #282a36 !important;
+    background: #875FAF !important;
+    border-color: #87FF5F !important;
+    color: #87FF5F !important;
     transform: none !important;
-    box-shadow: none !important;
+    box-shadow: 0 0 15px rgba(135, 95, 175, 0.6), 0 0 8px rgba(135, 255, 95, 0.4) !important;
     text-shadow: none !important;
 }
 
 [data-theme="focus"] .btn.btn-success:hover {
-    background: #50fa7b !important;
-    border-color: #50fa7b !important;
-    color: #282a36 !important;
+    background: #87FF5F !important;
+    border-color: #87FF5F !important;
+    color: #201430 !important;
     transform: none !important;
-    box-shadow: none !important;
+    box-shadow: 0 0 15px rgba(135, 255, 95, 0.6) !important;
     text-shadow: none !important;
 }
 
 [data-theme="focus"] .btn.btn-danger:hover {
-    background: #ff5555 !important;
-    border-color: #ff5555 !important;
-    color: #282a36 !important;
+    background: #DB6088 !important;
+    border-color: #DB6088 !important;
+    color: #201430 !important;
     transform: none !important;
-    box-shadow: none !important;
+    box-shadow: 0 0 15px rgba(219, 96, 136, 0.6) !important;
     text-shadow: none !important;
 }
 
@@ -411,12 +421,12 @@ body:not([data-theme="focus"]) {
     animation: pulse-amber 2s infinite;
 }
 
-/* Focus theme btn-primary base state - Dracula */
+/* Focus theme btn-primary base state - evangelion.nvim */
 [data-theme="focus"] .btn.btn-primary {
-    background: #bd93f9;
-    border: 1px solid #bd93f9;
-    color: #282a36;
-    box-shadow: none;
+    background: #B968FC;
+    border: 1px solid #B968FC;
+    color: #201430;
+    box-shadow: 0 0 10px rgba(185, 104, 252, 0.4);
     text-transform: none;
     letter-spacing: 0;
     animation: none;
@@ -456,10 +466,10 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .btn.btn-success {
-    background: #50fa7b;
-    color: #282a36;
-    border: 1px solid #50fa7b;
-    box-shadow: none;
+    background: #8EDF5F;
+    color: #201430;
+    border: 1px solid #87FF5F;
+    box-shadow: 0 0 10px rgba(142, 223, 95, 0.4);
     border-radius: 3px;
 }
 
@@ -478,10 +488,10 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .btn.btn-danger {
-    background: #ff5555;
-    color: #282a36;
-    border: 1px solid #ff5555;
-    box-shadow: none;
+    background: #DB6088;
+    color: #201430;
+    border: 1px solid #DB6088;
+    box-shadow: 0 0 10px rgba(219, 96, 136, 0.4);
     border-radius: 3px;
 }
 
@@ -633,9 +643,9 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .panel-header {
-    background: #1b1c21;
-    border-bottom: 1px solid #6272a4;
-    box-shadow: none;
+    background: linear-gradient(180deg, #402C56 0%, #39274D 100%);
+    border-bottom: 2px solid #B968FC;
+    box-shadow: 0 2px 8px rgba(185, 104, 252, 0.3);
 }
 
 [data-theme="focus"] .panel-header::after {
@@ -654,8 +664,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .panel-header h3 {
-    color: var(--color-text);
-    text-shadow: none;
+    color: #87FF5F;
+    text-shadow: 0 0 8px rgba(135, 255, 95, 0.5);
     text-transform: none;
     letter-spacing: 0;
     font-family: var(--font-family);
@@ -686,11 +696,11 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .tab {
-    border: 1px solid transparent;
-    color: #f8f8f2;
+    border: 1px solid #67478A;
+    color: #E1D6F8;
     text-transform: none;
     letter-spacing: 0;
-    background: rgba(68, 71, 90, 0.5);
+    background: rgba(103, 71, 138, 0.3);
     border-radius: var(--border-radius);
 }
 
@@ -702,9 +712,9 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .tab:hover {
-    color: #bd93f9;
-    background: rgba(189, 147, 249, 0.1);
-    box-shadow: none;
+    color: #87FF5F;
+    background: rgba(135, 255, 95, 0.15);
+    box-shadow: 0 0 8px rgba(135, 255, 95, 0.3);
     opacity: 1;
 }
 
@@ -717,11 +727,11 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .tab.active {
-    color: #bd93f9;
-    background: rgba(189, 147, 249, 0.2);
-    border-color: #bd93f9;
-    box-shadow: none;
-    text-shadow: none;
+    color: #87FF5F;
+    background: linear-gradient(135deg, rgba(185, 104, 252, 0.3), rgba(135, 255, 95, 0.15));
+    border-color: #87FF5F;
+    box-shadow: 0 0 12px rgba(135, 255, 95, 0.4), inset 0 0 8px rgba(185, 104, 252, 0.3);
+    text-shadow: 0 0 8px rgba(135, 255, 95, 0.5);
 }
 
 /* Tab Content */
@@ -758,9 +768,9 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .filename-input {
-    background: #1b1c21;
-    border: 1px solid #6272a4;
-    color: #f8f8f2;
+    background: #39274D;
+    border: 1px solid #67478A;
+    color: #E1D6F8;
     text-transform: none;
     letter-spacing: 0;
     font-family: var(--font-family);
@@ -777,9 +787,9 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .filename-input:focus {
-    border-color: #bd93f9;
-    background: #1b1c21;
-    box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3);
+    border-color: #87FF5F;
+    background: #39274D;
+    box-shadow: 0 0 0 2px rgba(135, 255, 95, 0.4);
     text-shadow: none;
 }
 
@@ -811,10 +821,10 @@ body:not([data-theme="focus"]) {
     z-index: 1;
 }
 
-/* Focus theme CodeMirror - Dracula */
+/* Focus theme CodeMirror - evangelion.nvim */
 [data-theme="focus"] .CodeMirror {
-    background: #282a36 !important;
-    color: #f8f8f2 !important;
+    background: #201430 !important;
+    color: #E1D6F8 !important;
     font-family: 'Consolas', 'SF Mono', 'Monaco', monospace !important;
 }
 
@@ -830,8 +840,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .CodeMirror-gutters {
-    background: #21222c !important;
-    border-right: 1px solid #1b1c21 !important;
+    background: #39274D !important;
+    border-right: 1px solid #67478A !important;
     box-shadow: none !important;
 }
 
@@ -845,7 +855,7 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .CodeMirror-linenumber {
-    color: #6272a4 !important;
+    color: #A1A0AD !important;
     text-shadow: none !important;
     opacity: 1 !important;
 }
@@ -858,8 +868,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .CodeMirror-cursor {
-    border-left: 2px solid #f8f8f2 !important;
-    box-shadow: none !important;
+    border-left: 2px solid #D99145 !important;
+    box-shadow: 0 0 5px rgba(217, 145, 69, 0.5) !important;
     animation: none !important;
 }
 
@@ -880,7 +890,7 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .CodeMirror-selected {
-    background: #1b1c21 !important;
+    background: rgba(142, 223, 95, 0.3) !important;
     box-shadow: none !important;
 }
 
@@ -889,7 +899,7 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .CodeMirror-activeline-background {
-    background: #1b1c21 !important;
+    background: #39274C !important;
 }
 
 /* File Manager */
@@ -1141,11 +1151,11 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .file-item .file-icon.folder {
-    color: #ffb86c;
+    color: #D99145;
 }
 
 [data-theme="focus"] .file-item .file-icon {
-    color: #8be9fd;
+    color: #A4D2EC;
 }
 
 .file-item .file-name {
@@ -1178,54 +1188,54 @@ body:not([data-theme="focus"]) {
     font-style: normal;
 }
 
-/* Focus theme overrides - Dracula */
+/* Focus theme overrides - evangelion.nvim */
 [data-theme="focus"] .upload-area,
 [data-theme="focus"] .file-browser {
-    background: #1b1c21;
-    border: 1px solid #6272a4;
+    background: #39274D;
+    border: 1px solid #67478A;
 }
 
 [data-theme="focus"] .upload-dropzone {
-    border-color: #6272a4;
+    border-color: #67478A;
 }
 
 [data-theme="focus"] .upload-dropzone:hover,
 [data-theme="focus"] .upload-dropzone.dragover {
-    border-color: #bd93f9;
-    background: rgba(189, 147, 249, 0.1);
+    border-color: #87FF5F;
+    background: rgba(135, 255, 95, 0.1);
 }
 
 [data-theme="focus"] .upload-dropzone i {
-    color: #bd93f9;
+    color: #87FF5F;
 }
 
 [data-theme="focus"] .file-toolbar {
-    background: #21222c;
-    border-bottom: 1px solid #1b1c21;
+    background: #402C56;
+    border-bottom: 1px solid #67478A;
 }
 
 [data-theme="focus"] .btn-icon:hover {
-    background: #1b1c21;
-    color: #bd93f9;
+    background: #39274D;
+    color: #87FF5F;
 }
 
 [data-theme="focus"] .file-item:hover {
-    background: rgba(189, 147, 249, 0.1);
-    color: #f8f8f2;
+    background: rgba(135, 255, 95, 0.1);
+    color: #E1D6F8;
 }
 
 [data-theme="focus"] .file-item.selected {
-    background: rgba(189, 147, 249, 0.2);
-    color: #bd93f9;
-    border: 1px solid #bd93f9;
+    background: rgba(185, 104, 252, 0.3);
+    color: #87FF5F;
+    border: 1px solid #87FF5F;
 }
 
 [data-theme="focus"] .upload-progress-bar {
-    background: #bd93f9;
+    background: linear-gradient(90deg, #B968FC, #87FF5F);
 }
 
 [data-theme="focus"] #uploadProgressPercent {
-    color: #bd93f9;
+    color: #87FF5F;
 }
 
 /* Terminal */
@@ -1273,11 +1283,11 @@ body:not([data-theme="focus"]) {
     animation: terminal-scan 4s linear infinite;
 }
 
-/* Focus theme terminal - Dracula */
+/* Focus theme terminal - evangelion.nvim */
 [data-theme="focus"] .terminal-output {
-    background: #282a36;
+    background: #201430;
     border: var(--border-secondary);
-    color: #f8f8f2;
+    color: #E1D6F8;
     font-family: 'Consolas', 'Monaco', monospace;
 }
 
@@ -1309,8 +1319,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .terminal-input-container {
-    background: #1b1c21;
-    border-top: 1px solid #6272a4;
+    background: #39274D;
+    border-top: 1px solid #67478A;
     box-shadow: none;
 }
 
@@ -1328,8 +1338,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .prompt {
-    color: #50fa7b;
-    text-shadow: none;
+    color: #87FF5F;
+    text-shadow: 0 0 8px rgba(135, 255, 95, 0.5);
     animation: none;
     font-family: 'Consolas', 'Monaco', monospace;
 }
@@ -1370,8 +1380,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .log-info {
-    color: #8be9fd;
-    text-shadow: none;
+    color: #AB92FC;
+    text-shadow: 0 0 5px rgba(171, 146, 252, 0.4);
 }
 
 .log-error { 
@@ -1384,8 +1394,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .log-error {
-    color: #ff5555;
-    text-shadow: none;
+    color: #DB6088;
+    text-shadow: 0 0 8px rgba(219, 96, 136, 0.5);
     animation: none;
 }
 
@@ -1396,8 +1406,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .log-warning {
-    color: #ffb86c;
-    text-shadow: none;
+    color: #D99145;
+    text-shadow: 0 0 5px rgba(217, 145, 69, 0.4);
 }
 
 .log-success { 
@@ -1409,8 +1419,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .log-success {
-    color: #50fa7b;
-    text-shadow: none;
+    color: #8EDF5F;
+    text-shadow: 0 0 8px rgba(142, 223, 95, 0.5);
 }
 
 .log-command { 
@@ -1425,10 +1435,10 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .log-command {
-    color: #f1fa8c;
-    text-shadow: none;
-    background: rgba(241, 250, 140, 0.1);
-    border-left-color: #f1fa8c;
+    color: #87FF5F;
+    text-shadow: 0 0 5px rgba(135, 255, 95, 0.5);
+    background: rgba(185, 104, 252, 0.2);
+    border-left-color: #87FF5F;
 }
 
 .log-response { 
@@ -1723,11 +1733,11 @@ body:not([data-theme="focus"]) {
     left: 100%;
 }
 
-/* Focus theme command buttons - Dracula */
+/* Focus theme command buttons - evangelion.nvim */
 [data-theme="focus"] .cmd-btn {
-    background: #1b1c21;
-    border: 1px solid #6272a4;
-    color: #f8f8f2;
+    background: #39274D;
+    border: 1px solid #67478A;
+    color: #E1D6F8;
     text-transform: none;
     letter-spacing: 0;
     font-family: var(--font-family);
@@ -1735,15 +1745,15 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .cmd-btn::before {
-    background: linear-gradient(90deg, transparent, rgba(189, 147, 249, 0.2), transparent);
+    background: linear-gradient(90deg, transparent, rgba(135, 255, 95, 0.2), transparent);
 }
 
 [data-theme="focus"] .cmd-btn:hover {
-    background: #bd93f9;
-    color: #282a36;
-    border-color: #bd93f9;
-    box-shadow: none;
-    text-shadow: none;
+    background: #875FAF;
+    color: #87FF5F;
+    border-color: #87FF5F;
+    box-shadow: 0 0 12px rgba(135, 255, 95, 0.4);
+    text-shadow: 0 0 5px rgba(135, 255, 95, 0.5);
 }
 
 .cmd-btn:hover {
@@ -1797,12 +1807,12 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .status-bar {
-    background: #1b1c21;
-    border-top: 1px solid #6272a4;
-    color: #f8f8f2;
+    background: linear-gradient(180deg, #39274D 0%, #201430 100%);
+    border-top: 2px solid #B968FC;
+    color: #E1D6F8;
     text-transform: none;
     letter-spacing: 0;
-    box-shadow: none;
+    box-shadow: 0 -2px 10px rgba(185, 104, 252, 0.3);
 }
 
 [data-theme="focus"] .status-bar::before {
@@ -1822,7 +1832,7 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .separator {
-    color: #6272a4;
+    color: #67478A;
     text-shadow: none;
 }
 
@@ -1916,13 +1926,13 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .credits a {
-    color: #8be9fd !important;
+    color: #87FF5F !important;
     font-weight: 500;
 }
 
 [data-theme="focus"] .credits a:hover {
-    color: #ff79c6 !important;
-    text-shadow: none !important;
+    color: #D99145 !important;
+    text-shadow: 0 0 5px rgba(217, 145, 69, 0.5) !important;
 }
 
 [data-theme="focus"] .credits img {
@@ -2179,54 +2189,54 @@ body:not([data-theme="focus"]) {
     text-shadow: 0 0 3px #ff6600 !important;
 }
 
-/* Focus theme syntax highlighting - Dracula */
+/* Focus theme syntax highlighting - evangelion.nvim */
 [data-theme="focus"] .cm-keyword {
-    color: #ff79c6 !important;   /* Pink */
+    color: #87FF5F !important;   /* kaworu - neon green */
     font-weight: 600 !important;
-    text-shadow: none !important;
+    text-shadow: 0 0 3px rgba(135, 255, 95, 0.4) !important;
 }
 [data-theme="focus"] .cm-def {
-    color: #50fa7b !important;   /* Green */
+    color: #9CDA7C !important;   /* kaji - muted green */
     font-weight: 600 !important;
-    text-shadow: none !important;
+    text-shadow: 0 0 3px rgba(156, 218, 124, 0.4) !important;
 }
 [data-theme="focus"] .cm-variable {
-    color: #f8f8f2 !important;   /* Foreground */
+    color: #E1D6F8 !important;   /* rei - light purple text */
     text-shadow: none !important;
 }
 [data-theme="focus"] .cm-variable-2 {
-    color: #ffb86c !important;   /* Orange */
-    text-shadow: none !important;
+    color: #B968FC !important;   /* atfield - bright purple */
+    text-shadow: 0 0 3px rgba(185, 104, 252, 0.3) !important;
 }
 [data-theme="focus"] .cm-string {
-    color: #f1fa8c !important;   /* Yellow */
-    text-shadow: none !important;
+    color: #AB92FC !important;   /* dummyplug - light purple */
+    text-shadow: 0 0 3px rgba(171, 146, 252, 0.3) !important;
 }
 [data-theme="focus"] .cm-comment {
-    color: #6272a4 !important;   /* Comment */
+    color: #A1A0AD !important;   /* shinji - gray */
     font-style: italic !important;
 }
 [data-theme="focus"] .cm-number {
-    color: #bd93f9 !important;   /* Purple */
+    color: #8EDF5F !important;   /* terminaldogma - lime green */
     font-weight: 500 !important;
-    text-shadow: none !important;
+    text-shadow: 0 0 3px rgba(142, 223, 95, 0.3) !important;
 }
 [data-theme="focus"] .cm-operator {
-    color: #ff79c6 !important;   /* Pink */
+    color: #B968FC !important;   /* atfield - bright purple */
     font-weight: bold !important;
 }
 [data-theme="focus"] .cm-bracket {
-    color: #f8f8f2 !important;   /* Foreground */
+    color: #B968FC !important;   /* atfield - bright purple */
     font-weight: bold !important;
     text-shadow: none !important;
 }
 [data-theme="focus"] .cm-property {
-    color: #8be9fd !important;   /* Cyan */
-    text-shadow: none !important;
+    color: #A4D2EC !important;   /* adam - light cyan */
+    text-shadow: 0 0 3px rgba(164, 210, 236, 0.4) !important;
 }
 [data-theme="focus"] .cm-builtin {
-    color: #8be9fd !important;   /* Cyan */
-    text-shadow: none !important;
+    color: #A4D2EC !important;   /* adam - light cyan */
+    text-shadow: 0 0 3px rgba(164, 210, 236, 0.4) !important;
 }
 
 /* Focus indicators */
@@ -2236,7 +2246,7 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .btn:focus {
-    box-shadow: 0 0 0 3px rgba(189, 147, 249, 0.4);
+    box-shadow: 0 0 0 3px rgba(135, 255, 95, 0.5);
 }
 
 .terminal-input:focus {
@@ -2246,8 +2256,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .terminal-input:focus {
-    background: rgba(189, 147, 249, 0.05);
-    box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3);
+    background: rgba(185, 104, 252, 0.1);
+    box-shadow: 0 0 0 2px rgba(135, 255, 95, 0.4);
 }
 
 /* Success/Error states for terminal */
@@ -2260,8 +2270,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .terminal-success {
-    border-left: 3px solid #50fa7b;
-    background: linear-gradient(90deg, rgba(80, 250, 123, 0.1), transparent);
+    border-left: 3px solid #87FF5F;
+    background: linear-gradient(90deg, rgba(135, 255, 95, 0.15), transparent);
 }
 
 .terminal-error {
@@ -2273,8 +2283,8 @@ body:not([data-theme="focus"]) {
 }
 
 [data-theme="focus"] .terminal-error {
-    border-left: 3px solid #ff5555;
-    background: linear-gradient(90deg, rgba(255, 85, 85, 0.1), transparent);
+    border-left: 3px solid #DB6088;
+    background: linear-gradient(90deg, rgba(219, 96, 136, 0.15), transparent);
 }
 
 /* Glass morphism effects */
