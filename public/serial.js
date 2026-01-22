@@ -23,12 +23,14 @@ class SerialManager {
             this.port = await navigator.serial.requestPort();
             
             // Open port with WebScreen settings
-            await this.port.open({ 
+            // bufferSize is critical for Mac - without it, data reception can stop after ~1KB
+            await this.port.open({
                 baudRate: 115200,
                 dataBits: 8,
                 stopBits: 1,
                 parity: 'none',
-                flowControl: 'none'
+                flowControl: 'none',
+                bufferSize: 16384  // 16KB buffer to prevent truncation issues on Mac
             });
 
             this.isConnected = true;
@@ -382,7 +384,10 @@ class SerialManager {
     }
 
     async setConfig(key, value) {
-        await this.sendCommand(`/config set ${key} ${value}`);
+        // Wrap value in quotes to handle special characters like #$%&
+        // Escape any existing quotes in the value
+        const escapedValue = String(value).replace(/"/g, '\\"');
+        await this.sendCommand(`/config set ${key} "${escapedValue}"`);
     }
 
     async catFile(filename) {
