@@ -102,24 +102,34 @@ All WebScreen serial commands are supported with auto-completion:
 ### Example JavaScript Code
 
 ```javascript
-// Simple WebScreen application
-create_label_with_text('Hello WebScreen!');
-set_background_color('#2980b9');
+"use strict";
 
-// Network example
-wifi_connect('MyNetwork', 'password');
-let weather = http_get('https://api.weather.com/current');
-let temp = parse_json_value(weather, 'temperature');
-create_label_with_text('Temperature: ' + temp + '°C');
+// Create styles (colors as hex integers, not strings)
+let style = create_style();
+style_set_text_font(style, 48);        // Use available sizes: 14,20,28,34,40,44,48
+style_set_text_color(style, 0xFFFFFF); // White text
+style_set_text_align(style, 1);        // Center align
+
+// Create and style a label
+let label = create_label(268, 120);    // x, y position
+obj_add_style(label, style, 0);
+label_set_text(label, "Hello WebScreen!");
+
+// Network example with custom port
+let response = http_get("http://192.168.1.20:2000/api/data");
+let value = parse_json_value(response, "temperature");
+print("Temperature: " + value);
 
 // Storage example
-sd_write_file('/config.txt', 'My configuration');
-let config = sd_read_file('/config.txt');
-print('Config loaded: ' + config);
+sd_write_file("/config.txt", "My configuration");
+let config = sd_read_file("/config.txt");
+print("Config loaded: " + config);
 
-// Graphics example
-draw_rect(50, 50, 100, 100, '#ff6b6b');
-create_image('logo.png');
+// Timer callback (function name as string)
+let update = function() {
+  label_set_text(label, "Updated!");
+};
+create_timer("update", 1000);
 ```
 
 ## Development Workflow
@@ -307,26 +317,66 @@ extraKeys: {
 ## WebScreen API Reference
 
 ### Display Functions
-- `create_label_with_text('text')` - Creates a text label on screen
+- `create_label(x, y)` - Create a label at position, returns handle
+- `label_set_text(label, 'text')` - Set label text
 - `create_image('filename')` - Display an image file
-- `set_background_color('#color')` - Set screen background color
-- `draw_rect(x, y, w, h, color)` - Draw a colored rectangle
+- `draw_rect(x, y, w, h, color)` - Draw a colored rectangle (color as 0xRRGGBB)
+- `show_gif_from_sd('/file.gif', x, y)` - Display animated GIF at position
 
 ### Network Functions
 - `wifi_connect('ssid', 'pass')` - Connect to WiFi network
-- `http_get('url')` - Perform HTTP GET request
-- `http_post('url', data)` - Perform HTTP POST request
+- `http_get('url')` - HTTP GET (supports custom ports: `http://host:port/path`)
+- `http_post('url', data)` - HTTP POST (supports custom ports)
+- `http_delete('url')` - HTTP DELETE (supports custom ports)
 
 ### Storage Functions
 - `sd_write_file('path', data)` - Write data to SD card file
 - `sd_read_file('path')` - Read data from SD card file
-- `sd_list_files('/')` - List files in directory
+- `sd_list_dir('/')` - List files in directory
+
+### Style Functions
+- `create_style()` - Create a style object
+- `style_set_text_font(style, size)` - Set font size (14, 20, 28, 34, 40, 44, 48 only)
+- `style_set_text_color(style, 0xRRGGBB)` - Set text color
+- `style_set_bg_color(style, 0xRRGGBB)` - Set background color
+- `obj_add_style(obj, style, 0)` - Apply style to object
 
 ### Utility Functions
 - `delay(milliseconds)` - Pause execution for specified time
 - `print(message)` - Output message to serial console
 - `parse_json_value(json, key)` - Extract value from JSON string
-- `get_timestamp()` - Get current unix timestamp
+- `create_timer('callback_name', interval_ms)` - Create periodic timer
+
+## LVGL Configuration Reference
+
+### Available Font Sizes
+Only these Montserrat sizes are enabled in the firmware:
+
+| Size | Recommended Use |
+|------|-----------------|
+| 14 | Default, small text |
+| 20 | Body text |
+| 28 | Subheadings |
+| 34 | Medium headings |
+| 40 | Large headings |
+| 44 | Extra large |
+| 48 | Display text |
+
+**Important:** Sizes like 16, 24, 32 are NOT available.
+
+### Supported Image Formats
+- **PNG** ✅ - Recommended for icons and graphics
+- **GIF** ✅ - Animated images (keep under 50KB)
+- **SJPG** ✅ - Split JPG for large images
+- **BMP** ❌ - Not supported
+
+### Enabled Widgets
+Label, Image, Arc, Line, Button, Button Matrix, Canvas, Chart, Meter, Message Box, Span
+
+### Memory Guidelines
+- Elk JS heap: 256KB (PSRAM)
+- Keep scripts under 3KB for stability
+- Limit to 5 styles and 10 labels per app
 
 ## Contributing
 
