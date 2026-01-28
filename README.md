@@ -44,7 +44,7 @@ A modern, web-based integrated development environment for WebScreen devices wit
 
 ### **Serial Commands**
 All WebScreen serial commands are supported with auto-completion:
-- **Core**: `/help`, `/stats`, `/info`, `/reboot`
+- **Core**: `/help`, `/stats`, `/info`, `/reboot`, `/brightness`
 - **File Operations**: `/write`, `/ls`, `/cat`, `/rm`
 - **Network**: `/wget`, `/ping`
 - **Configuration**: `/config get/set`, `/backup`
@@ -322,6 +322,8 @@ extraKeys: {
 - `create_image('filename')` - Display an image file
 - `draw_rect(x, y, w, h, color)` - Draw a colored rectangle (color as 0xRRGGBB)
 - `show_gif_from_sd('/file.gif', x, y)` - Display animated GIF at position
+- `set_brightness(value)` - Set display brightness (0-255)
+- `get_brightness()` - Get current display brightness
 
 ### Network Functions
 - `wifi_connect('ssid', 'pass')` - Connect to WiFi network
