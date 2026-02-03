@@ -127,12 +127,29 @@ function parseSSEStream($sseData) {
 }
 
 /**
- * Validate JWT token
+ * Validate token (supports both JWT and better-auth tokens)
  */
-function validateToken($token) {
+function validateToken($token, $authType = null) {
     try {
+        // Check for better-auth tokens (simple session tokens, not JWTs)
+        if ($authType === 'better-auth') {
+            // better-auth tokens are simple strings, just check they exist and aren't empty
+            if (empty($token) || strlen($token) < 10) {
+                error_log('[Auth] Invalid better-auth token');
+                return false;
+            }
+            // For better-auth, we trust the token and let the API validate it
+            return true;
+        }
+
+        // Legacy JWT validation for Firebase tokens
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
+            // Not a JWT - might be a better-auth token, consider valid
+            if (strlen($token) >= 10) {
+                error_log('[Auth] Non-JWT token, assuming better-auth');
+                return true;
+            }
             return false;
         }
 
@@ -216,11 +233,75 @@ function pollDeviceCode() {
 
         $data = $response['data'];
 
-        // If authorized, automatically exchange the token
-        if (isset($data['accessToken']) && $data['status'] === 'authorized') {
-            error_log('[Auth] Device authorized! Exchanging token...');
+        // DEBUG: Log the full response from Embedder
+        error_log('[Auth] Full Embedder response: ' . json_encode($data));
 
-            // Exchange the custom token for Firebase credentials
+        // If authorized, handle based on auth type
+        if (isset($data['accessToken']) && $data['status'] === 'authorized') {
+            error_log('[Auth] Device authorized!');
+            error_log('[Auth] Auth type: ' . ($data['authType'] ?? 'unknown'));
+
+            // Check if using new "better-auth" system (simple token, not Firebase)
+            if (isset($data['authType']) && $data['authType'] === 'better-auth') {
+                error_log('[Auth] Using better-auth flow - no Firebase exchange needed');
+
+                // Store credentials directly from the response
+                $credentials = [
+                    'accessToken' => $data['accessToken'],
+                    'idToken' => $data['accessToken'],  // Use same token for compatibility
+                    'refreshToken' => null,  // better-auth may not use refresh tokens
+                    'authType' => 'better-auth',
+                    'expiresAt' => (time() + 86400) * 1000,  // Assume 24h expiry, in milliseconds
+                    'user' => [
+                        'uid' => $data['user']['id'] ?? null,
+                        'email' => $data['user']['email'] ?? null,
+                        'displayName' => $data['user']['name'] ?? null,
+                        'picture' => $data['user']['image'] ?? null
+                    ],
+                    'timestamp' => time() * 1000
+                ];
+
+                $_SESSION['embedder_credentials'] = $credentials;
+
+                // Create an Embedder session
+                try {
+                    $sessionResponse = makeRequest(
+                        EMBEDDER_CONFIG['backendUrl'] . '/api/v1/sessions',
+                        'POST',
+                        [],
+                        [
+                            'Authorization: Bearer ' . $data['accessToken'],
+                            'Content-Type: application/json',
+                            'User-Agent: webscreen-serial-ide/1.0.0'
+                        ]
+                    );
+
+                    if ($sessionResponse['status'] === 200 && isset($sessionResponse['data']['id'])) {
+                        $_SESSION['embedder_session_id'] = $sessionResponse['data']['id'];
+                        error_log('[Auth] Created Embedder session: ' . $_SESSION['embedder_session_id']);
+                    } else {
+                        error_log('[Auth] Session response: ' . json_encode($sessionResponse));
+                    }
+                } catch (Exception $e) {
+                    error_log('[Auth] Error creating session: ' . $e->getMessage());
+                }
+
+                // Clear device code data
+                unset($_SESSION['device_code_data']);
+
+                return [
+                    'success' => true,
+                    'data' => [
+                        'status' => 'authorized',
+                        'accessToken' => true,
+                        'credentialsStored' => true,
+                        'authType' => 'better-auth'
+                    ]
+                ];
+            }
+
+            // Legacy Firebase flow - exchange the custom token
+            error_log('[Auth] Using legacy Firebase flow - exchanging token...');
             $exchangeResult = exchangeToken($data['accessToken']);
 
             if (!$exchangeResult['success']) {
@@ -237,7 +318,7 @@ function pollDeviceCode() {
                 'success' => true,
                 'data' => [
                     'status' => 'authorized',
-                    'accessToken' => true,  // Indicate token was exchanged
+                    'accessToken' => true,
                     'credentialsStored' => true
                 ]
             ];
@@ -487,8 +568,9 @@ function getCredentials() {
 
     $credentials = $_SESSION['embedder_credentials'];
 
-    // Validate token
-    $valid = validateToken($credentials['accessToken']);
+    // Validate token (pass authType if available)
+    $authType = isset($credentials['authType']) ? $credentials['authType'] : null;
+    $valid = validateToken($credentials['accessToken'], $authType);
 
     if (!$valid) {
         // Clear invalid credentials
@@ -578,7 +660,8 @@ function proxyAPI() {
         $credentials = $_SESSION['embedder_credentials'];
 
         // Validate token
-        if (!validateToken($credentials['accessToken'])) {
+        $authType = isset($credentials['authType']) ? $credentials['authType'] : null;
+        if (!validateToken($credentials['accessToken'], $authType)) {
             throw new Exception('Token invalid or expired');
         }
 
@@ -756,7 +839,8 @@ function getModels() {
         $credentials = $_SESSION['embedder_credentials'];
 
         // Validate token
-        if (!validateToken($credentials['accessToken'])) {
+        $authType = isset($credentials['authType']) ? $credentials['authType'] : null;
+        if (!validateToken($credentials['accessToken'], $authType)) {
             throw new Exception('Token invalid or expired');
         }
 
