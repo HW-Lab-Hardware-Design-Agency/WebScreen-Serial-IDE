@@ -6,45 +6,13 @@ class WebScreenIDE {
         this.fileList = [];
         this.isMonitoring = false;
         this.currentTheme = 'retro';
+        this.isCapturingScreenshot = false;
 
         // File browser state
         this.currentPath = '/';
         this.selectedFile = null;
         this.fileListData = [];
         this.fileListLines = [];
-
-        // Embedder configuration (from official CLI package)
-        this.embedderConfig = {
-            authUrl: 'https://app.embedder.dev/',
-            authDomain: 'embedder-dev.firebaseapp.com',
-            tokenApiUrl: 'https://securetoken.googleapis.com/v1/token',
-            apiKey: 'AIzaSyDuNXvHd-GvTrmXG6_2TnrfqRWo-ApPd3s',
-            projectId: 'embedder-dev',
-            storageBucket: 'embedder-dev.firebasestorage.app',
-            messagingSenderId: '547074918538',
-            appId: '1:547074918538:web:b5495d2347046fd29e8573',
-            measurementId: 'G-4KT5CW28KM',
-            // Backend endpoints
-            backendUrl: 'https://backend-service-prod.embedder.dev',
-            proxyAnthropicUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/anthropic/',
-            proxyOpenAIUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/openai/',
-            proxyGoogleUrl: 'https://backend-service-prod.embedder.dev/api/v1/proxy/google/',
-            // PHP backend for authentication (no CORS issues)
-            phpAuthUrl: 'auth.php'
-        };
-
-        this.embedderConversation = [];
-        this.embedderSettings = {
-            model: 'claude-sonnet-4-20250514',
-            temperature: 0.7
-        };
-
-        // Device code authentication state
-        this.deviceCodePolling = null;
-        this.deviceCodeData = null;
-
-        // Cached credentials from PHP session
-        this.credentials = null;
 
         this.init();
     }
@@ -54,7 +22,6 @@ class WebScreenIDE {
         this.initEditor();
         this.setupEventListeners();
         this.setupSerialEvents();
-        this.initEmbedder();
         this.updateUI();
     }
 
@@ -127,6 +94,37 @@ create_label_with_text('Hello WebScreen!');
         // Run button
         document.getElementById('runBtn').addEventListener('click', () => {
             this.runScript();
+        });
+
+        // Run & set as default button (/load <file> save)
+        document.getElementById('runSaveBtn').addEventListener('click', () => {
+            this.runScript(true);
+        });
+
+        // Eval selection button (/eval)
+        document.getElementById('evalBtn').addEventListener('click', () => {
+            this.evalSelection();
+        });
+
+        // Screenshot button (/screenshot)
+        document.getElementById('screenshotBtn').addEventListener('click', () => {
+            this.captureScreenshot();
+        });
+
+        // Screenshot overlay controls
+        document.getElementById('screenshotClose').addEventListener('click', () => {
+            this.hideScreenshotOverlay();
+        });
+
+        document.getElementById('screenshotDownload').addEventListener('click', () => {
+            this.downloadScreenshot();
+        });
+
+        document.getElementById('screenshotOverlay').addEventListener('click', (e) => {
+            // Close when clicking the dimmed backdrop (not the modal itself)
+            if (e.target.id === 'screenshotOverlay') {
+                this.hideScreenshotOverlay();
+            }
         });
 
         // Clear terminal
@@ -216,55 +214,6 @@ create_label_with_text('Hello WebScreen!');
             this.currentFile = e.target.value;
             this.updateEditorMode(e.target.value);
         });
-
-        document.getElementById('loginDeviceCodeBtn').addEventListener('click', () => {
-            this.startDeviceCodeAuth();
-        });
-
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            this.embedderLogout();
-        });
-
-        document.getElementById('closeAuthModal').addEventListener('click', () => {
-            this.closeAuthModal();
-        });
-
-        document.getElementById('authModal').addEventListener('click', (e) => {
-            if (e.target.id === 'authModal') {
-                this.closeAuthModal();
-            }
-        });
-
-        document.getElementById('sendEmbedderMessage').addEventListener('click', () => {
-            this.sendEmbedderMessage();
-        });
-
-        document.getElementById('embedderInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendEmbedderMessage();
-            }
-        });
-
-        document.getElementById('sendCodeToEmbedder').addEventListener('click', () => {
-            this.includeCodeInEmbedder();
-        });
-
-        document.getElementById('clearEmbedderChat').addEventListener('click', () => {
-            this.clearEmbedderConversation();
-        });
-
-        document.getElementById('embedderModel').addEventListener('change', (e) => {
-            this.embedderSettings.model = e.target.value;
-        });
-
-        // Embedder quick actions
-        document.querySelectorAll('.embedder-quick-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const prompt = btn.dataset.prompt;
-                this.embedderQuickAction(prompt);
-            });
-        });
     }
 
     setupSerialEvents() {
@@ -344,6 +293,9 @@ create_label_with_text('Hello WebScreen!');
         // Enable/disable buttons based on connection
         document.getElementById('saveBtn').disabled = !connected;
         document.getElementById('runBtn').disabled = !connected;
+        document.getElementById('runSaveBtn').disabled = !connected;
+        document.getElementById('evalBtn').disabled = !connected;
+        document.getElementById('screenshotBtn').disabled = !connected || this.isCapturingScreenshot;
         document.getElementById('refreshFiles').disabled = !connected;
         document.getElementById('deleteFile').disabled = !connected;
         
@@ -385,9 +337,11 @@ create_label_with_text('Hello WebScreen!');
     handleCommandCompletion(input) {
         const value = input.value.toLowerCase();
         const commands = [
-            '/help', '/stats', '/info', '/write', '/config', '/ls', 
-            '/cat', '/rm', '/load', '/wget', '/ping', '/backup', 
-            '/monitor', '/reboot'
+            '/help', '/stats', '/info', '/write', '/upload', '/config', '/ls',
+            '/cat', '/rm', '/load', '/restart_app', '/eval', '/errors', '/gc',
+            '/wget', '/ping', '/backup', '/monitor', '/brightness', '/time',
+            '/settime', '/reboot', '/mkdir', '/download', '/screenshot',
+            '/factory_reset'
         ];
         
         const matches = commands.filter(cmd => cmd.startsWith(value));
@@ -428,7 +382,12 @@ create_label_with_text('Hello WebScreen!');
         const output = document.getElementById('terminalOutput');
         const line = document.createElement('div');
         line.className = className;
-        line.textContent = text;
+        if (text.includes('\x1b')) {
+            this.renderAnsiInto(line, text);
+        } else {
+            // Fast path: plain text renders exactly as before
+            line.textContent = text;
+        }
         output.appendChild(line);
         
         // Auto-scroll to bottom
@@ -438,6 +397,137 @@ create_label_with_text('Hello WebScreen!');
         while (output.children.length > 1000) {
             output.removeChild(output.firstChild);
         }
+    }
+
+    // ANSI parsing adapted from ESPConnect (MIT, The Last Outpost Workshop)
+    // Converts ESC[...m SGR sequences (16 basic fg/bg colors, bold, reset) into
+    // classed spans. Text is inserted via textContent/createTextNode, so it is
+    // always HTML-safe. Non-SGR CSI sequences are stripped and ignored.
+    renderAnsiInto(container, text) {
+        const state = { fg: null, bg: null, bold: false };
+        let buf = '';
+
+        const flush = () => {
+            if (!buf) return;
+            const classes = [];
+            if (state.bold) classes.push('ansi-bold');
+            if (state.fg !== null) classes.push(`ansi-fg-${state.fg}`);
+            if (state.bg !== null) classes.push(`ansi-bg-${state.bg}`);
+            if (classes.length) {
+                const span = document.createElement('span');
+                span.className = classes.join(' ');
+                span.textContent = buf;
+                container.appendChild(span);
+            } else {
+                container.appendChild(document.createTextNode(buf));
+            }
+            buf = '';
+        };
+
+        let i = 0;
+        while (i < text.length) {
+            const ch = text[i];
+            if (ch === '\x1b' && text[i + 1] === '[') {
+                // Find the CSI final byte (0x40-0x7E)
+                let end = -1;
+                for (let j = i + 2; j < text.length; j++) {
+                    const cc = text.charCodeAt(j);
+                    if (cc >= 0x40 && cc <= 0x7e) { end = j; break; }
+                }
+                if (end === -1) break; // truncated sequence: drop the remainder
+                flush();
+                if (text[end] === 'm') {
+                    const codes = (text.slice(i + 2, end) || '0')
+                        .split(';')
+                        .map(t => (t === '' ? 0 : parseInt(t, 10)));
+                    for (let k = 0; k < codes.length; k++) {
+                        const code = codes[k];
+                        if (Number.isNaN(code)) continue;
+                        if (code === 0) { state.fg = null; state.bg = null; state.bold = false; }
+                        else if (code === 1) state.bold = true;
+                        else if (code === 22) state.bold = false;
+                        else if (code === 39) state.fg = null;
+                        else if (code === 49) state.bg = null;
+                        else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) state.fg = code;
+                        else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) state.bg = code;
+                        else if (code === 38 || code === 48) {
+                            // Skip unsupported 256-color / truecolor parameters
+                            const mode = codes[k + 1];
+                            if (mode === 5) k += 2;
+                            else if (mode === 2) k += 4;
+                        }
+                    }
+                }
+                i = end + 1;
+                continue;
+            }
+            if (ch === '\x1b') { i++; continue; } // lone ESC: drop it
+            buf += ch;
+            i++;
+        }
+        flush();
+    }
+
+    // Screenshot capture (/screenshot): decodes the RGB565 block from the
+    // device and renders it onto a canvas in a modal overlay.
+    async captureScreenshot() {
+        if (!this.serialManager.isConnected || this.isCapturingScreenshot) return;
+
+        this.isCapturingScreenshot = true;
+        this.updateUI();
+        this.appendToTerminal('WebScreen> /screenshot', 'log-command');
+
+        try {
+            const shot = await this.serialManager.captureScreenshot(30000);
+            this.renderScreenshot(shot);
+            this.appendToTerminal(`Screenshot captured (${shot.width}x${shot.height})`, 'log-success');
+        } catch (error) {
+            this.appendToTerminal(`Screenshot failed: ${error.message}`, 'log-error');
+        } finally {
+            this.isCapturingScreenshot = false;
+            this.updateUI();
+        }
+    }
+
+    renderScreenshot({ width, height, swap, bytes }) {
+        const canvas = document.getElementById('screenshotCanvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        const image = ctx.createImageData(width, height);
+        const pixels = Math.min(width * height, bytes.length >> 1);
+
+        for (let i = 0; i < pixels; i++) {
+            const b0 = bytes[2 * i];
+            const b1 = bytes[2 * i + 1];
+            // RGB565; _SWAP means high byte first
+            const c = swap ? (b0 << 8) | b1 : (b1 << 8) | b0;
+            const j = i * 4;
+            image.data[j] = Math.round(((c >> 11) & 31) * 255 / 31);
+            image.data[j + 1] = Math.round(((c >> 5) & 63) * 255 / 63);
+            image.data[j + 2] = Math.round((c & 31) * 255 / 31);
+            image.data[j + 3] = 255;
+        }
+
+        ctx.putImageData(image, 0, 0);
+
+        const title = document.getElementById('screenshotTitle');
+        if (title) title.textContent = `Device Screenshot (${width}x${height})`;
+        document.getElementById('screenshotOverlay').style.display = 'flex';
+    }
+
+    hideScreenshotOverlay() {
+        document.getElementById('screenshotOverlay').style.display = 'none';
+    }
+
+    downloadScreenshot() {
+        const canvas = document.getElementById('screenshotCanvas');
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = `webscreen-screenshot-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 
     clearTerminal() {
@@ -460,10 +550,11 @@ create_label_with_text('Hello WebScreen!');
         URL.revokeObjectURL(url);
     }
 
+    // Resolves to true once the upload has fully completed, false otherwise.
     async saveFile() {
         if (!this.serialManager.isConnected) {
             this.appendToTerminal('Device not connected', 'log-error');
-            return;
+            return false;
         }
 
         const filename = this.currentFile || document.getElementById('filename').value || 'script.js';
@@ -471,7 +562,7 @@ create_label_with_text('Hello WebScreen!');
 
         if (!content.trim()) {
             this.appendToTerminal('No content to save', 'log-warning');
-            return;
+            return false;
         }
 
         // Ensure filename has path prefix
@@ -488,13 +579,15 @@ create_label_with_text('Hello WebScreen!');
 
             // Refresh file list
             setTimeout(() => this.refreshFileList(), 1000);
+            return true;
         } catch (error) {
             this.appendToTerminal(`Save failed: ${error.message}`, 'log-error');
             this.updateFileStatus('Error');
+            return false;
         }
     }
 
-    async runScript() {
+    async runScript(setDefault = false) {
         const filename = this.currentFile || document.getElementById('filename').value || 'script.js';
 
         // Only run .js files
@@ -507,17 +600,48 @@ create_label_with_text('Hello WebScreen!');
         const fullPath = filename.startsWith('/') ? filename : '/' + filename;
 
         try {
-            // Save first, then run
-            await this.saveFile();
+            // Save first; saveFile() resolves only after the upload has completed
+            const saved = await this.saveFile();
+            if (!saved) return;
 
-            // Wait a bit for save to complete
-            setTimeout(async () => {
-                await this.serialManager.loadScript(fullPath);
-                this.appendToTerminal(`Running script: ${fullPath}`, 'log-success');
-            }, 1500);
+            await this.serialManager.loadScript(fullPath, setDefault);
+            this.appendToTerminal(
+                setDefault
+                    ? `Running script (saved as default): ${fullPath}`
+                    : `Running script: ${fullPath}`,
+                'log-success'
+            );
         } catch (error) {
             this.appendToTerminal(`Run failed: ${error.message}`, 'log-error');
         }
+    }
+
+    // Send the current editor selection (or current line) to the running app via /eval
+    async evalSelection() {
+        if (!this.serialManager.isConnected) {
+            this.appendToTerminal('Device not connected', 'log-error');
+            return;
+        }
+
+        let code = this.codeEditor.getSelection();
+        if (!code || !code.trim()) {
+            code = this.codeEditor.getLine(this.codeEditor.getCursor().line) || '';
+        }
+
+        // /eval takes a single line; collapse newlines
+        code = code.replace(/\r?\n/g, ' ').trim();
+
+        if (!code) {
+            this.appendToTerminal('Nothing to eval: selection and current line are empty', 'log-warning');
+            return;
+        }
+
+        if (code.length > 255) {
+            this.appendToTerminal(`Eval aborted: snippet is ${code.length} chars (/eval max is 255)`, 'log-warning');
+            return;
+        }
+
+        await this.executeCommand(`/eval ${code}`);
     }
 
     switchTab(tabName) {
@@ -892,796 +1016,6 @@ create_label_with_text('Hello WebScreen!');
         this.setTheme(newTheme);
     }
 
-    // Embedder Methods
-    async initEmbedder() {
-        console.log('[Embedder] Initializing...');
-
-        // Check for authentication callback
-        const urlParams = new URLSearchParams(window.location.search);
-        const authenticated = urlParams.get('authenticated');
-
-        if (authenticated === 'true') {
-            console.log('[Embedder] Authentication callback detected');
-            this.switchTab('embedder');  // Switch to Embedder tab
-            this.updateEmbedderStatus('Authentication successful!', 'success');
-
-            // Clean URL
-            const cleanUrl = window.location.pathname + window.location.hash;
-            window.history.replaceState({}, document.title, cleanUrl);
-        }
-
-        // Load credentials from PHP session
-        await this.loadEmbedderCredentials();
-
-        // Update UI
-        await this.updateEmbedderUI();
-
-        // No auto-refresh to prevent excessive requests to auth.php
-        // UI will update when authentication state changes (login, logout, refresh)
-    }
-
-
-    async handleEmbedderAuthSuccess(customToken) {
-        try {
-            // Switch to Embedder tab to show progress
-            this.switchTab('embedder');
-            this.updateEmbedderStatus('Exchanging token...', 'info');
-
-            console.log('[Embedder] Received custom token from Embedder');
-            console.log('[Embedder] Exchanging custom token for Firebase ID token...');
-
-            // Exchange custom token for Firebase ID token
-            // This is what the CLI does: wD(SD, r) = signInWithCustomToken(firebaseAuth, customToken)
-            const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${this.embedderConfig.apiKey}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    token: customToken,
-                    returnSecureToken: true
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error?.message || `Authentication failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('[Embedder] Successfully obtained Firebase ID token');
-
-            // Extract expiration from JWT payload (like CLI does)
-            let expiresAt = Date.now() + 3600000; // Default 1 hour
-            try {
-                const payload = this.parseJWT(data.idToken);
-                if (payload && typeof payload.exp === 'number') {
-                    expiresAt = payload.exp * 1000; // Convert to milliseconds
-                    console.log('[Embedder] Token expires at:', new Date(expiresAt).toISOString());
-                }
-            } catch (error) {
-                console.warn('[Embedder] Could not parse token expiry, using default');
-            }
-
-            const credentials = {
-                accessToken: data.idToken,
-                idToken: data.idToken,
-                refreshToken: data.refreshToken,
-                expiresAt: expiresAt,
-                user: {
-                    uid: data.localId,
-                    email: data.email || null,
-                    displayName: data.displayName || null
-                },
-                timestamp: Date.now()
-            };
-
-            console.log('[Embedder] Saving credentials...');
-            this.saveEmbedderCredentials(credentials);
-            this.updateEmbedderStatus('Authentication successful! You can now chat with Embedder.', 'success');
-            await this.updateEmbedderUI();
-            console.log('[Embedder] Authentication complete!');
-
-        } catch (error) {
-            console.error('[Embedder] Authentication error:', error);
-            this.switchTab('embedder');
-            this.updateEmbedderStatus(`Authentication failed: ${error.message}`, 'error');
-        }
-    }
-
-    parseJWT(token) {
-        try {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-
-            return JSON.parse(jsonPayload);
-        } catch (error) {
-            throw new Error('Invalid JWT token');
-        }
-    }
-
-    // Token validation (from CLI implementation)
-    validateToken(token) {
-        try {
-            if (!token || token.split('.').length !== 3) {
-                return false;
-            }
-
-            // Parse JWT payload
-            const payload = this.parseJWT(token);
-
-            // Check expiry
-            if (typeof payload.exp === 'number' && (payload.exp * 1000) < Date.now()) {
-                console.log('[Embedder] Token expired');
-                return false;
-            }
-
-            // Check issuer
-            if (typeof payload.iss === 'string' && !payload.iss.includes('securetoken.google.com')) {
-                console.warn('[Embedder] Invalid token issuer:', payload.iss);
-                return false;
-            }
-
-            return true;
-        } catch (error) {
-            console.error('[Embedder] Token validation error:', error);
-            return false;
-        }
-    }
-
-    async startDeviceCodeAuth() {
-        console.log('[Embedder] Starting device code flow...');
-        this.updateEmbedderStatus('Starting device code authentication...', 'info');
-
-        try {
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=start_device_code`);
-
-            if (!response.ok) {
-                throw new Error(`Failed to start device auth: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to start device code flow');
-            }
-
-            this.deviceCodeData = result.data;
-            const { userCode, deviceCode, expiresIn, verificationUri } = result.data;
-
-            console.log('[Embedder] Device code received:', { userCode, verificationUri });
-
-            this.showDeviceCodeUI(userCode, verificationUri);
-
-            const expiresAt = Date.now() + (expiresIn * 1000);
-            this.startDeviceCodePolling(userCode, expiresAt);
-
-        } catch (error) {
-            console.error('[Embedder] Device code auth error:', error);
-            this.updateEmbedderStatus(`Device code auth failed: ${error.message}`, 'error');
-        }
-    }
-
-    showDeviceCodeUI(userCode, verificationUri) {
-        document.getElementById('modalDeviceCodeValue').textContent = userCode;
-        document.getElementById('modalVerificationUrl').textContent = verificationUri;
-        document.getElementById('modalVerificationUrl').href = verificationUri;
-
-        document.getElementById('authModal').classList.add('show');
-
-        window.open(verificationUri, '_blank');
-
-        this.updateEmbedderStatus('Waiting for authentication...', 'info');
-    }
-
-    closeAuthModal() {
-        document.getElementById('authModal').classList.remove('show');
-        this.cancelDeviceCodeAuth();
-    }
-
-    startDeviceCodePolling(userCode, expiresAt) {
-        const POLL_INTERVAL = 3000;
-
-        const poll = async () => {
-            try {
-                if (Date.now() > expiresAt) {
-                    console.log('[Embedder] Device code expired, restarting...');
-                    this.cancelDeviceCodeAuth();
-                    this.updateEmbedderStatus('Device code expired. Please try again.', 'error');
-                    return;
-                }
-
-                const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=poll_device_code`);
-
-                if (!response.ok) {
-                    throw new Error(`Polling failed: ${response.status}`);
-                }
-
-                const result = await response.json();
-
-                if (!result.success) {
-                    throw new Error(result.error || 'Polling failed');
-                }
-
-                const data = result.data;
-                console.log('[Embedder] Poll response:', JSON.stringify(data));
-
-                if (data.status === 'authorized' && (data.accessToken || data.credentialsStored)) {
-                    console.log('[Embedder] Device authorized! Token exchanged by PHP backend.');
-                    this.cancelDeviceCodeAuth();
-
-                    this.updateEmbedderStatus('Device authorized! Loading credentials...', 'success');
-
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    const credentials = await this.loadEmbedderCredentials();
-
-                    if (credentials && credentials.accessToken) {
-                        console.log('[Embedder] Credentials loaded successfully!');
-                        this.updateEmbedderStatus('Authentication complete!', 'success');
-                        await this.updateEmbedderUI();
-                    } else {
-                        console.error('[Embedder] Failed to load credentials after authorization');
-                        this.updateEmbedderStatus('Authorization succeeded but failed to load credentials. Please refresh the page.', 'error');
-                    }
-
-                } else if (data.status === 'authorization_pending') {
-                    console.log('[Embedder] Still waiting for user to authorize...');
-                    this.deviceCodePolling = setTimeout(poll, POLL_INTERVAL);
-
-                } else if (data.status === 'code_not_found') {
-                    console.log('[Embedder] Code not found, restarting...');
-                    this.cancelDeviceCodeAuth();
-                    this.startDeviceCodeAuth();
-
-                } else {
-                    console.error('[Embedder] Unknown poll status:', data);
-                    throw new Error(data.status || 'Unknown error occurred');
-                }
-
-            } catch (error) {
-                console.error('[Embedder] Polling error:', error);
-                this.cancelDeviceCodeAuth();
-                this.updateEmbedderStatus(`Polling failed: ${error.message}`, 'error');
-            }
-        };
-
-        poll();
-    }
-
-    cancelDeviceCodeAuth() {
-        if (this.deviceCodePolling) {
-            clearTimeout(this.deviceCodePolling);
-            this.deviceCodePolling = null;
-        }
-
-        this.deviceCodeData = null;
-
-        document.getElementById('authModal').classList.remove('show');
-
-        console.log('[Embedder] Device code authentication cancelled');
-    }
-
-    async embedderLogout() {
-        // Cancel any ongoing device code polling
-        this.cancelDeviceCodeAuth();
-
-        try {
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=logout`);
-
-            if (!response.ok) {
-                throw new Error(`Logout failed: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Logout failed');
-            }
-
-            this.updateEmbedderStatus('Logged out successfully', 'info');
-
-            this.credentials = null;
-            await this.updateEmbedderUI();
-
-        } catch (error) {
-            console.error('[Embedder] Logout error:', error);
-            this.updateEmbedderStatus('Logged out (with error)', 'info');
-            this.credentials = null;
-            await this.updateEmbedderUI();
-        }
-    }
-
-    async loadEmbedderCredentials() {
-        try {
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=get_credentials`);
-
-            if (!response.ok) {
-                console.error('[Embedder] Failed to load credentials:', response.status);
-                this.credentials = null;
-                return null;
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                console.error('[Embedder] Error loading credentials:', result.error);
-                this.credentials = null;
-                return null;
-            }
-
-            if (result.authenticated && result.credentials) {
-                this.credentials = result.credentials;
-                return result.credentials;
-            }
-
-            this.credentials = null;
-            return null;
-
-        } catch (error) {
-            console.error('[Embedder] Error loading credentials:', error);
-            this.credentials = null;
-            return null;
-        }
-    }
-
-    async updateEmbedderUI() {
-        const credentials = this.credentials;
-        const isAuthenticated = credentials && credentials.accessToken;
-        const isExpired = credentials && Date.now() > credentials.expiresAt;
-
-        console.log('[Embedder] UI Update - Authenticated:', isAuthenticated, 'Expired:', isExpired);
-
-        document.getElementById('authMethodSelection').classList.toggle('hidden', isAuthenticated);
-        document.getElementById('authenticatedActions').classList.toggle('hidden', !isAuthenticated);
-        document.getElementById('userSection').classList.toggle('hidden', !isAuthenticated);
-
-        const chatEnabled = isAuthenticated && !isExpired;
-        document.getElementById('embedderInput').disabled = !chatEnabled;
-        document.getElementById('sendEmbedderMessage').disabled = !chatEnabled;
-        document.getElementById('sendCodeToEmbedder').disabled = !chatEnabled;
-        document.getElementById('clearEmbedderChat').disabled = !chatEnabled;
-
-        document.querySelectorAll('.embedder-quick-btn').forEach(btn => {
-            btn.disabled = !chatEnabled;
-        });
-
-        const statusDot = document.getElementById('embedderStatusIndicator');
-        const statusText = document.getElementById('embedderStatusText');
-
-        if (isAuthenticated) {
-            const userInfo = {
-                email: credentials.user?.email || 'N/A',
-                uid: credentials.user?.uid ? credentials.user.uid.substring(0, 8) + '...' : 'N/A'
-            };
-            document.getElementById('userInfo').textContent = JSON.stringify(userInfo, null, 2);
-
-            if (!isExpired) {
-                await this.loadEmbedderModels();
-            }
-
-            if (isExpired) {
-                statusDot.className = 'status-dot disconnected';
-                statusText.textContent = 'Token expired';
-                this.updateEmbedderStatus('Token expired. Please refresh or login again.', 'error');
-            } else {
-                statusDot.className = 'status-dot connected';
-                statusText.textContent = 'Connected';
-                const currentStatus = document.getElementById('authStatus');
-                if (!currentStatus || currentStatus.textContent.includes('Not authenticated')) {
-                    this.updateEmbedderStatus('Authenticated', 'success');
-                }
-            }
-        } else {
-            statusDot.className = 'status-dot disconnected';
-            statusText.textContent = 'Not authenticated';
-            const currentStatus = document.getElementById('authStatus');
-            if (!currentStatus || !currentStatus.textContent.includes('Processing')) {
-                this.updateEmbedderStatus('Not authenticated', 'info');
-            }
-        }
-    }
-
-    formatTimeRemaining(expiresAt) {
-        const now = Date.now();
-        const remaining = expiresAt - now;
-
-        if (remaining < 0) {
-            return 'Expired';
-        }
-
-        const minutes = Math.floor(remaining / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-
-        if (minutes > 60) {
-            const hours = Math.floor(minutes / 60);
-            const mins = minutes % 60;
-            return `${hours}h ${mins}m`;
-        }
-
-        return `${minutes}m ${seconds}s`;
-    }
-
-    updateEmbedderStatus(message, type = 'info') {
-        const statusEl = document.getElementById('authStatus');
-        if (statusEl) {
-            statusEl.textContent = message;
-            statusEl.className = `status-${type}`;
-            statusEl.style.display = 'block';
-
-            console.log('[Embedder] Status update:', type, message);
-
-            // Auto-hide success/info messages after 5 seconds (not errors)
-            if (type === 'success' || (type === 'info' && !message.includes('Redirecting'))) {
-                setTimeout(() => {
-                    statusEl.style.display = 'none';
-                }, 5000);
-            }
-        }
-    }
-
-    // Embedder Chat Methods
-    async sendEmbedderMessage() {
-        const input = document.getElementById('embedderInput');
-        const message = input.value.trim();
-
-        if (!message) return;
-
-        // Check cached credentials
-        if (!this.credentials || !this.credentials.accessToken) {
-            alert('Please login with Embedder first');
-            this.updateEmbedderStatus('Not authenticated. Please login first.', 'error');
-            return;
-        }
-
-        // Check if token is expired
-        if (Date.now() > this.credentials.expiresAt) {
-            alert('Token expired. Please refresh or login again.');
-            this.updateEmbedderStatus('Token expired', 'error');
-            return;
-        }
-
-        // Add user message to conversation
-        this.embedderConversation.push({
-            role: 'user',
-            content: message
-        });
-
-        this.renderEmbedderConversation();
-        input.value = '';
-
-        // Show typing indicator
-        this.showEmbedderTyping();
-
-        try {
-            const response = await this.callEmbedderAPI(this.embedderConversation, this.credentials.accessToken);
-
-            // Remove typing indicator
-            this.hideEmbedderTyping();
-
-            if (response && response.message) {
-                // Add assistant response to conversation
-                this.embedderConversation.push({
-                    role: 'assistant',
-                    content: response.message
-                });
-
-                this.renderEmbedderConversation();
-            }
-        } catch (error) {
-            this.hideEmbedderTyping();
-            console.error('Embedder API error:', error);
-
-            // Add error message to conversation
-            this.embedderConversation.push({
-                role: 'assistant',
-                content: `Error: ${error.message}`
-            });
-            this.renderEmbedderConversation();
-        }
-    }
-
-    async callEmbedderAPI(messages, token) {
-        const model = this.embedderSettings.model;
-
-        console.log('[Embedder] API Request via PHP proxy:', { model, messageCount: messages.length });
-
-        // Call PHP proxy instead of Embedder API directly (bypasses CORS)
-        const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=proxy_api`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: model,
-                messages: messages,
-                temperature: this.embedderSettings.temperature,
-                max_tokens: 4096
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[Embedder] Proxy Error Response:', errorText);
-            throw new Error(`Proxy request failed: ${response.status} - ${errorText}`);
-        }
-
-        const result = await response.json();
-
-        if (!result.success) {
-            console.error('[Embedder] API Error:', result.error);
-            throw new Error(result.error || 'API request failed');
-        }
-
-        const data = result.data;
-        console.log('[Embedder] API Response received');
-
-        // Parse response based on API type
-        const isAnthropic = model.startsWith('claude-');
-
-        if (isAnthropic) {
-            // Anthropic response format: { content: [{ type: "text", text: "..." }] }
-            return {
-                message: data.content?.[0]?.text || 'No response'
-            };
-        } else {
-            // OpenAI response format: { choices: [{ message: { content: "..." } }] }
-            return {
-                message: data.choices?.[0]?.message?.content || 'No response'
-            };
-        }
-    }
-
-    async loadEmbedderModels() {
-        try {
-            console.log('[Embedder] Loading available models...');
-
-            const response = await fetch(`${this.embedderConfig.phpAuthUrl}?action=get_models`);
-
-            if (!response.ok) {
-                throw new Error(`Failed to load models: ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to load models');
-            }
-
-            const models = result.models;
-            console.log('[Embedder] Loaded models:', models);
-
-            // Populate model dropdown
-            const modelSelect = document.getElementById('embedderModel');
-            modelSelect.innerHTML = '';  // Clear existing options
-
-            // Group models by provider
-            const anthropicModels = models.filter(m => m.provider === 'anthropic' && m.status === 'enabled');
-            const openaiModels = models.filter(m => m.provider === 'openai' && m.status === 'enabled');
-
-            // Helper function to create readable model names
-            const formatModelName = (modelName) => {
-                // claude-sonnet-4-20250514 -> Claude Sonnet 4 (2025-05-14)
-                // claude-sonnet-4-5-20250929 -> Claude Sonnet 4.5 (2025-09-29)
-                // gpt-5-2025-08-07 -> GPT-5 (2025-08-07)
-
-                if (modelName.startsWith('claude-')) {
-                    const parts = modelName.replace('claude-', '').split('-');
-                    const variant = parts[0]; // sonnet, haiku, opus
-                    const version = parts.slice(1, -1).join('.'); // 4, 4.5, etc
-                    const date = parts[parts.length - 1]; // 20250514
-                    const formattedDate = `${date.substring(0,4)}-${date.substring(4,6)}-${date.substring(6,8)}`;
-                    return `Claude ${variant.charAt(0).toUpperCase() + variant.slice(1)} ${version} (${formattedDate})`;
-                } else if (modelName.startsWith('gpt-')) {
-                    const parts = modelName.split('-');
-                    const version = parts[1]; // 4o, 5, etc
-                    const date = parts[2]; // 20250807
-                    if (date) {
-                        const formattedDate = `${date.substring(0,4)}-${date.substring(4,6)}-${date.substring(6,8)}`;
-                        return `GPT-${version} (${formattedDate})`;
-                    }
-                    return `GPT-${version}`;
-                }
-                return modelName;
-            };
-
-            // Add Anthropic models
-            if (anthropicModels.length > 0) {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = 'Anthropic';
-                anthropicModels.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model.name;
-                    option.textContent = formatModelName(model.name);
-                    optgroup.appendChild(option);
-                });
-                modelSelect.appendChild(optgroup);
-            }
-
-            // Add OpenAI models
-            if (openaiModels.length > 0) {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = 'OpenAI';
-                openaiModels.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model.name;
-                    option.textContent = formatModelName(model.name);
-                    optgroup.appendChild(option);
-                });
-                modelSelect.appendChild(optgroup);
-            }
-
-            // Set default to first model if current selection is invalid
-            if (models.length > 0) {
-                const currentModel = this.embedderSettings.model;
-                const modelExists = models.some(m => m.name === currentModel);
-                if (!modelExists) {
-                    this.embedderSettings.model = models[0].name;
-                    modelSelect.value = models[0].name;
-                    console.log('[Embedder] Default model set to:', models[0].name);
-                } else {
-                    modelSelect.value = currentModel;
-                }
-            }
-
-            console.log('[Embedder] Models loaded and dropdown populated');
-
-        } catch (error) {
-            console.error('[Embedder] Error loading models:', error);
-            // Keep hardcoded defaults if API fails
-            this.updateEmbedderStatus('Could not load models. Using defaults.', 'warning');
-        }
-    }
-
-    renderEmbedderConversation() {
-        const conversationEl = document.getElementById('embedderConversation');
-
-        // Clear welcome message if there are messages
-        if (this.embedderConversation.length > 0) {
-            conversationEl.innerHTML = '';
-        }
-
-        // Render all messages
-        this.embedderConversation.forEach((msg, index) => {
-            const messageEl = document.createElement('div');
-            messageEl.className = `embedder-message ${msg.role}`;
-
-            const headerEl = document.createElement('div');
-            headerEl.className = 'embedder-message-header';
-            headerEl.textContent = msg.role === 'user' ? 'You' : 'Embedder';
-
-            const contentEl = document.createElement('div');
-            contentEl.className = 'embedder-message-content';
-
-            // Format content (handle code blocks)
-            contentEl.innerHTML = this.formatEmbedderMessage(msg.content);
-
-            messageEl.appendChild(headerEl);
-            messageEl.appendChild(contentEl);
-
-            // Add action buttons for assistant messages with code
-            if (msg.role === 'assistant' && msg.content.includes('```')) {
-                const actionsEl = document.createElement('div');
-                actionsEl.className = 'embedder-message-actions';
-
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'btn btn-sm';
-                copyBtn.textContent = 'Copy Code';
-                copyBtn.onclick = () => this.copyEmbedderCode(msg.content);
-
-                const insertBtn = document.createElement('button');
-                insertBtn.className = 'btn btn-sm btn-primary';
-                insertBtn.textContent = 'Insert to Editor';
-                insertBtn.onclick = () => this.insertEmbedderCodeToEditor(msg.content);
-
-                actionsEl.appendChild(copyBtn);
-                actionsEl.appendChild(insertBtn);
-                messageEl.appendChild(actionsEl);
-            }
-
-            conversationEl.appendChild(messageEl);
-        });
-
-        // Auto-scroll to bottom
-        conversationEl.scrollTop = conversationEl.scrollHeight;
-    }
-
-    formatEmbedderMessage(content) {
-        // Simple markdown-like formatting for code blocks
-        return content
-            .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/\n/g, '<br>');
-    }
-
-    copyEmbedderCode(content) {
-        // Extract code from markdown code blocks
-        const codeMatch = content.match(/```[\w+]?\n([\s\S]*?)```/);
-        if (codeMatch) {
-            navigator.clipboard.writeText(codeMatch[1].trim());
-            this.appendToTerminal('Code copied to clipboard', 'log-success');
-        }
-    }
-
-    insertEmbedderCodeToEditor(content) {
-        // Extract code from markdown code blocks
-        const codeMatch = content.match(/```[\w+]?\n([\s\S]*?)```/);
-        if (codeMatch) {
-            this.codeEditor.setValue(codeMatch[1].trim());
-            this.switchTab('editor');
-            this.appendToTerminal('Code inserted into editor', 'log-success');
-        }
-    }
-
-    includeCodeInEmbedder() {
-        const code = this.codeEditor.getValue();
-        const input = document.getElementById('embedderInput');
-
-        if (code.trim()) {
-            input.value = `Here's my code:\n\`\`\`javascript\n${code}\n\`\`\`\n\n${input.value}`;
-            input.focus();
-        }
-    }
-
-    embedderQuickAction(prompt) {
-        if (!this.credentials || !this.credentials.accessToken) {
-            alert('Please login with Embedder first');
-            this.updateEmbedderStatus('Not authenticated. Please login first.', 'error');
-            return;
-        }
-
-        const code = this.codeEditor.getValue();
-        const input = document.getElementById('embedderInput');
-
-        if (code.trim()) {
-            input.value = `${prompt}:\n\`\`\`javascript\n${code}\n\`\`\``;
-        } else {
-            input.value = prompt;
-        }
-
-        // Auto-send the message
-        this.sendEmbedderMessage();
-    }
-
-    clearEmbedderConversation() {
-        if (confirm('Are you sure you want to clear the conversation?')) {
-            this.embedderConversation = [];
-            const conversationEl = document.getElementById('embedderConversation');
-            conversationEl.innerHTML = `
-                <div class="embedder-welcome">
-                    <h4>Welcome to Embedder</h4>
-                    <p>Conversation cleared. Start a new chat!</p>
-                </div>
-            `;
-        }
-    }
-
-    showEmbedderTyping() {
-        const conversationEl = document.getElementById('embedderConversation');
-        const typingEl = document.createElement('div');
-        typingEl.id = 'embedder-typing';
-        typingEl.className = 'embedder-message assistant';
-        typingEl.innerHTML = `
-            <div class="embedder-message-header">Embedder</div>
-            <div class="embedder-typing-indicator">
-                <div class="embedder-typing-dot"></div>
-                <div class="embedder-typing-dot"></div>
-                <div class="embedder-typing-dot"></div>
-            </div>
-        `;
-        conversationEl.appendChild(typingEl);
-        conversationEl.scrollTop = conversationEl.scrollHeight;
-    }
-
-    hideEmbedderTyping() {
-        const typingEl = document.getElementById('embedder-typing');
-        if (typingEl) {
-            typingEl.remove();
-        }
-    }
 }
 
 // Initialize the IDE when DOM is loaded

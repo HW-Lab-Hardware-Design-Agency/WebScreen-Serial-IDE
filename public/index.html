@@ -60,7 +60,6 @@
                     <div class="tabs">
                         <button class="tab" data-tab="console">Serial Console</button>
                         <button class="tab active" data-tab="editor">Code Editor</button>
-                        <button class="tab" data-tab="embedder">Embedder</button>
                         <button class="tab" data-tab="files">File Manager</button>
                     </div>
                     <div class="editor-actions">
@@ -75,6 +74,21 @@
                         <button id="runBtn" class="btn btn-sm btn-success" title="Run Script">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                        </button>
+                        <button id="runSaveBtn" class="btn btn-sm btn-success" title="Run &amp; Set as Default (persists to webscreen.json)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="4 3 15 10 4 17 4 3"></polygon>
+                                <path d="M19 3v10"></path>
+                                <polyline points="16 11 19 14 22 11"></polyline>
+                                <line x1="16" y1="19" x2="22" y2="19"></line>
+                            </svg>
+                        </button>
+                        <button id="evalBtn" class="btn btn-sm" title="Eval selection (or current line) on device via /eval">Eval</button>
+                        <button id="screenshotBtn" class="btn btn-sm" title="Capture Device Screenshot (/screenshot)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"></path>
+                                <circle cx="12" cy="13" r="4"></circle>
                             </svg>
                         </button>
                         <button id="clearBtn" class="btn btn-sm" title="Clear Terminal">Clear</button>
@@ -97,112 +111,6 @@
                 <!-- Code Editor Tab -->
                 <div class="tab-content" id="editor-tab">
                     <div id="codeEditor"></div>
-                </div>
-
-                <!-- Embedder Tab -->
-                <div class="tab-content hidden" id="embedder-tab">
-                    <div class="embedder-main-layout">
-                        <!-- Chat Area -->
-                        <div class="embedder-chat-container">
-                            <div class="embedder-header">
-                                <h3>Embedder AI Assistant</h3>
-                                <div class="embedder-status-inline">
-                                    <span id="embedderStatusIndicator" class="status-dot disconnected"></span>
-                                    <span id="embedderStatusText">Not authenticated</span>
-                                </div>
-                            </div>
-
-                            <!-- Auth Status Messages -->
-                            <div id="authStatus" class="status-info" style="display: none; margin: 10px 15px; padding: 10px; border-radius: 4px;"></div>
-
-                            <!-- Conversation Display -->
-                            <div id="embedderConversation" class="embedder-conversation">
-                                <div class="embedder-welcome">
-                                    <h4>AI Assistant</h4>
-                                    <p><strong>Note:</strong> This feature uses Embedder, a third-party AI service operated by Embedder Tech Inc. It is not affiliated with or part of WebScreen.</p>
-                                    <p>To use this feature, you need an Embedder account. Create one at <a href="https://embedder.dev/" target="_blank" style="color: #4CAF50;">embedder.dev</a></p>
-                                </div>
-                            </div>
-
-                            <!-- Input Area -->
-                            <div class="embedder-input-container">
-                                <div class="embedder-input-actions">
-                                    <button id="sendCodeToEmbedder" class="btn btn-sm" title="Include current editor code" disabled>
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="16 18 22 12 16 6"></polyline>
-                                            <polyline points="8 6 2 12 8 18"></polyline>
-                                        </svg>
-                                        Include Code
-                                    </button>
-                                    <button id="clearEmbedderChat" class="btn btn-sm" title="Clear conversation">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="3 6 5 6 21 6"></polyline>
-                                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-                                        </svg>
-                                        Clear
-                                    </button>
-                                </div>
-                                <div class="embedder-input-wrapper">
-                                    <textarea id="embedderInput" class="embedder-textarea" placeholder="Ask Embedder anything about your code..." rows="3" disabled></textarea>
-                                    <button id="sendEmbedderMessage" class="btn btn-primary embedder-send-btn" disabled>
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                                        </svg>
-                                        Send
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Sidebar with Auth & Settings -->
-                        <div class="embedder-sidebar">
-                            <div class="embedder-section compact">
-                                <h4>Authentication</h4>
-
-                                <div id="authMethodSelection" class="button-group">
-                                    <button id="loginDeviceCodeBtn" class="btn btn-primary btn-sm">Login</button>
-                                </div>
-
-                                <div id="authenticatedActions" class="button-group hidden">
-                                    <button id="logoutBtn" class="btn btn-danger btn-sm">Logout</button>
-                                </div>
-                            </div>
-
-                            <!-- User Info -->
-                            <div id="userSection" class="embedder-section compact hidden">
-                                <h4>User</h4>
-                                <div class="info-box-compact">
-                                    <pre id="userInfo"></pre>
-                                </div>
-                            </div>
-
-                            <div class="embedder-section compact">
-                                <h4>Model</h4>
-                                <div class="embedder-setting">
-                                    <select id="embedderModel" class="input-field">
-                                        <option value="claude-sonnet-4-20250514" selected>Claude Sonnet 4 (Latest)</option>
-                                        <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-                                        <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
-                                        <option value="gpt-4o">GPT-4o</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- Quick Actions -->
-                            <div class="embedder-section compact">
-                                <h4>Quick Actions</h4>
-                                <div class="embedder-quick-actions">
-                                    <button class="embedder-quick-btn" data-prompt="Explain this code">Explain Code</button>
-                                    <button class="embedder-quick-btn" data-prompt="Find bugs in this code">Find Bugs</button>
-                                    <button class="embedder-quick-btn" data-prompt="Improve this code">Improve</button>
-                                    <button class="embedder-quick-btn" data-prompt="Add comments to this code">Add Comments</button>
-                                    <button class="embedder-quick-btn" data-prompt="Convert to TypeScript">To TypeScript</button>
-                                    <button class="embedder-quick-btn" data-prompt="Optimize performance">Optimize</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- File Manager Tab -->
@@ -277,6 +185,7 @@
                             <button class="cmd-btn" data-cmd="/monitor mem">Monitor</button>
                             <button class="cmd-btn" data-cmd="/ping google.com">Ping</button>
                             <button class="cmd-btn" data-cmd="/backup save">Backup</button>
+                            <button class="cmd-btn" data-cmd="/errors">Errors</button>
                             <button class="cmd-btn" data-cmd="/reboot">Reboot</button>
                         </div>
                     </div>
@@ -398,21 +307,22 @@
         </footer>
     </div>
 
-    <!-- Authentication Modal -->
-    <div id="authModal" class="auth-modal">
-        <div class="auth-modal-content">
-            <div class="auth-modal-header">
-                <h3>Embedder Authentication</h3>
-                <button id="closeAuthModal" class="auth-modal-close">&times;</button>
+    <!-- Screenshot Overlay -->
+    <div class="screenshot-overlay" id="screenshotOverlay" style="display: none;">
+        <div class="screenshot-modal">
+            <div class="screenshot-modal-header">
+                <h3 id="screenshotTitle">Device Screenshot</h3>
+                <button class="btn-icon" id="screenshotClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="auth-modal-body">
-                <div class="auth-code-display">
-                    <a id="modalVerificationUrl" href="#" target="_blank" class="auth-code-url"></a>
-                    <div id="modalDeviceCodeValue" class="auth-code-value"></div>
-                </div>
-                <div class="auth-modal-instructions">
-                    A new tab has been opened. Enter the code above to authenticate.
-                </div>
+            <div class="screenshot-canvas-wrap">
+                <canvas id="screenshotCanvas" width="536" height="240"></canvas>
+            </div>
+            <div class="screenshot-modal-actions">
+                <button id="screenshotDownload" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Download PNG
+                </button>
             </div>
         </div>
     </div>
