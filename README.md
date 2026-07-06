@@ -1,4 +1,4 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT) ![Issues](https://img.shields.io/github/issues/HW-Lab-Hardware-Design-Agency/WebScreen-Serial-IDE) [![image](https://img.shields.io/badge/website-WebScreen.cc-D31027)](https://webscreen.cc) [![image](https://img.shields.io/badge/view_on-CrowdSupply-099)](https://www.crowdsupply.com/hw-media-lab/webscreen)
+[![License: CC BY-SA 4.0](https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-sa/4.0/) ![Issues](https://img.shields.io/github/issues/HW-Lab-Hardware-Design-Agency/WebScreen-Serial-IDE) [![image](https://img.shields.io/badge/website-WebScreen.cc-D31027)](https://webscreen.cc) [![image](https://img.shields.io/badge/view_on-CrowdSupply-099)](https://www.crowdsupply.com/hw-media-lab/webscreen)
 
 # WebScreen Serial IDE
 
@@ -13,8 +13,10 @@ A modern, web-based integrated development environment for WebScreen devices wit
 - **Dual Theme System**: Switch between "Retro" (amber phosphor) and "Focus" (VS Code-like) themes
 - **Tabbed Interface**: Organized workspace with Serial Console, JavaScript Editor, and File Manager
 - **URL Theme Selection**: Set theme via URL parameter (`?mode=retro` or `?mode=focus`)
-- **Real-time Terminal**: Live serial console with command history and auto-completion
+- **Real-time Terminal**: Live serial console with command history, auto-completion, and ANSI color rendering (16 basic colors + bold)
 - **File Management**: Upload, list, download, and manage files on the device
+- **Screenshot Capture**: Grab the device display via `/screenshot`, preview it in a modal, and save it as PNG
+- **Verified Uploads**: File uploads wait for the firmware acknowledgement (`[OK] File saved:` / `[ERROR] Upload failed:`) instead of fixed delays, so failures surface immediately
 
 ### **Code Editor**
 - **Syntax Highlighting**: JavaScript syntax highlighting with theme-appropriate colors
@@ -28,6 +30,12 @@ A modern, web-based integrated development environment for WebScreen devices wit
   - `F5`: Run script on device
   - `Ctrl+/`: Toggle comments
   - `Ctrl+Space`: Trigger autocomplete
+
+### **Device Workflow Tools**
+- **Run & Set as Default**: Second run button sends `/load <file> save`, persisting the script as the boot default in `webscreen.json`
+- **Eval Selection**: Send the current editor selection (or current line) to the running app via `/eval` (max 255 chars) for live REPL-style tweaking
+- **Errors Quick Button**: One-click `/errors` to show the last JavaScript error and line number after a failed run
+- **Screenshot Button**: Camera icon in the toolbar sends `/screenshot`, decodes the RGB565 stream, renders it to a canvas overlay, and offers a "Download PNG" export (30s timeout; disabled while disconnected or capturing)
 
 ### **Theme System**
 #### Retro Theme
@@ -43,13 +51,13 @@ A modern, web-based integrated development environment for WebScreen devices wit
 - **Professional Layout**: Clean typography and spacing
 
 ### **Serial Commands**
-All WebScreen serial commands are supported with auto-completion:
-- **Core**: `/help`, `/stats`, `/info`, `/reboot`, `/brightness`
-- **File Operations**: `/write`, `/ls`, `/cat`, `/rm`
-- **Network**: `/wget`, `/ping`
+All WebScreen serial commands are supported with terminal tab-completion:
+- **Core**: `/help`, `/stats`, `/info`, `/reboot`, `/brightness`, `/time`, `/settime`, `/screenshot` (alias `/ss`), `/factory_reset confirm`
+- **File Operations**: `/write`, `/upload` (firmware replies `[OK] File saved: <name> (<size>)` or `[ERROR] Upload failed: <reason>` after `END`), `/download <file>` (binary-safe base64 download), `/ls <path> [json]` (plain listing ends with `Total: N files, M directories`; `json` returns a single-line JSON object), `/cat`, `/rm`, `/mkdir <path>`
+- **Network**: `/wget` (alias `fetch`; the old `download` alias now refers to the `/download` file transfer), `/ping`
 - **Configuration**: `/config get/set`, `/backup`
-- **Monitoring**: `/monitor cpu/mem/net`
-- **Script Management**: `/load`, `/run`
+- **Monitoring**: `/monitor cpu/mem/net`, `/errors`, `/gc`
+- **Script Management**: `/load` (with optional `save` to persist as default), `/restart_app`, `/eval`
 
 ### **User Interface**
 - **Responsive Design**: Works on desktop and tablet devices
@@ -68,15 +76,20 @@ All WebScreen serial commands are supported with auto-completion:
 ### Usage
 
 1. **Open the IDE**
+
+   The app is pure static HTML/JS (no backend required). Either open `public/index.html` directly in a supported browser, or serve the `public/` directory with any static file server:
+   ```bash
+   python3 -m http.server -d public
+   # or
+   npx serve public
    ```
-   Open index.html in a supported browser
-   ```
+   (DDEV also works if you already use it, but PHP is not required.)
 
 2. **Choose Theme** (Optional)
    ```
    Add theme parameter to URL:
-   - file:///path/to/index.html?mode=retro  (amber phosphor theme)
-   - file:///path/to/index.html?mode=focus  (clean development theme)
+   - file:///path/to/public/index.html?mode=retro  (amber phosphor theme)
+   - file:///path/to/public/index.html?mode=focus  (clean development theme)
    ```
 
 3. **Connect Device**
@@ -197,15 +210,16 @@ Button Toggle:
 ### File Structure
 ```
 WebScreen-Serial-IDE/
-├── index.html          # Main HTML with tabbed interface
-├── style.css           # Dual-theme CSS system
-├── serial.js           # Serial communication manager
-├── app.js              # Main application with theme management
-├── assets/
-│   ├── animation.gif   # Terminal animation for retro theme
-│   ├── logo.png        # WebScreen logo
-│   └── favicon.ico     # Browser favicon
-└── README.md           # This documentation
+├── public/                 # Static docroot
+│   ├── index.html          # Main HTML with tabbed interface
+│   ├── style.css           # Dual-theme CSS system
+│   ├── serial.js           # Serial communication manager
+│   ├── app.js              # Main application with theme management
+│   └── assets/
+│       ├── animation.gif   # Terminal animation for retro theme
+│       ├── logo.png        # WebScreen logo
+│       └── favicon.ico     # Browser favicon
+└── README.md               # This documentation
 ```
 
 ## API Reference
@@ -225,8 +239,13 @@ await serial.sendFile('script.js', content)
 // WebScreen specific methods
 await serial.getStats()
 await serial.listFiles()
-await serial.loadScript('app.js')
+await serial.deleteFile('/old.js')
+await serial.makeDirectory('/data')      // /mkdir
+await serial.loadScript('app.js')        // run once
+await serial.loadScript('app.js', true)  // run & set as boot default
 await serial.backup('save', 'production')
+await serial.captureScreenshot()         // -> { width, height, format, swap, bytes }
+await serial.factoryReset()              // /factory_reset confirm
 ```
 
 ### WebScreenIDE Class
@@ -234,8 +253,12 @@ Main application controller with theme management:
 
 ```javascript
 // Editor operations
-ide.saveFile()
-ide.runScript()
+ide.saveFile()          // resolves true once the upload completes
+ide.runScript()         // save, then /load
+ide.runScript(true)     // save, then /load <file> save (set as default)
+ide.evalSelection()     // send editor selection via /eval
+ide.captureScreenshot() // /screenshot -> canvas modal with Download PNG
+ide.downloadLog()       // export terminal log as .txt
 ide.clearTerminal()
 
 // Theme management
@@ -384,7 +407,7 @@ Label, Image, Arc, Line, Button, Button Matrix, Canvas, Chart, Meter, Message Bo
 
 ### Development Setup
 1. Clone the repository
-2. Open `index.html` in a supported browser
+2. Open `public/index.html` in a supported browser (or run `python3 -m http.server -d public`)
 3. Connect a WebScreen device for testing
 4. Test both themes with URL parameters
 5. Make modifications and test locally
@@ -417,4 +440,4 @@ If WebScreen has been useful for your projects:
 
 ## License
 
-This project is open source. See the [LICENSE](LICENSE) file for details.
+This project is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). See the [LICENSE](LICENSE) file for details.

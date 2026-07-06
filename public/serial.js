@@ -11,6 +11,24 @@ class SerialManager {
         this.historyIndex = -1;
         this.onDataReceived = null;
         this.onConnectionChange = null;
+        // Internal per-line listeners (Set of callbacks). A listener that
+        // returns true "consumes" the line so it is not forwarded to
+        // onDataReceived (used e.g. to keep screenshot base64 out of the console).
+        this._lineListeners = new Set();
+    }
+
+    _dispatchLine(line) {
+        let consumed = false;
+        for (const listener of Array.from(this._lineListeners)) {
+            try {
+                if (listener(line) === true) consumed = true;
+            } catch (e) {
+                console.error('Line listener error:', e);
+            }
+        }
+        if (!consumed && this.onDataReceived) {
+            this.onDataReceived(line);
+        }
     }
 
     async connect() {
@@ -103,16 +121,16 @@ class SerialManager {
                     const line = buffer.slice(0, newlineIndex).replace('\r', '');
                     buffer = buffer.slice(newlineIndex + 1);
                     
-                    if (line.length > 0 && this.onDataReceived) {
-                        this.onDataReceived(line);
+                    if (line.length > 0) {
+                        this._dispatchLine(line);
                     }
                 }
 
                 // Process remaining buffer if it doesn't end with newline
                 if (buffer.length > 0 && !buffer.includes('\n')) {
                     // Check if it looks like a partial line that should be displayed
-                    if (buffer.trim() && this.onDataReceived) {
-                        this.onDataReceived(buffer);
+                    if (buffer.trim()) {
+                        this._dispatchLine(buffer);
                         buffer = '';
                     }
                 }
@@ -181,14 +199,48 @@ class SerialManager {
                 await new Promise(resolve => setTimeout(resolve, 50));
             }
 
-            // Send END to finish
+            // Send END to finish, then wait for the firmware acknowledgement
             await this.sendCommand('END');
+
+            const ack = await this.waitForUploadAck();
+            if (!ack.ok) {
+                throw new Error(ack.message || 'Upload failed');
+            }
 
             return true;
         } catch (error) {
             console.error('File send failed:', error);
             throw error;
         }
+    }
+
+    // Waits for the firmware upload result line after END has been sent:
+    //   success: "[OK] File saved: <name> (<size>)" or "Script saved: ..."
+    //   failure: "[ERROR] Upload failed: <reason>" or "Upload aborted"
+    // Old firmware prints nothing, so the timeout resolves as success.
+    waitForUploadAck(timeoutMs = 8000) {
+        return new Promise((resolve) => {
+            const cleanup = () => {
+                clearTimeout(timer);
+                this._lineListeners.delete(listener);
+            };
+            const listener = (line) => {
+                if (line.includes('File saved:') || line.includes('Script saved:')) {
+                    cleanup();
+                    resolve({ ok: true, message: line });
+                } else if (line.includes('Upload failed') || line.includes('Upload aborted')) {
+                    cleanup();
+                    resolve({ ok: false, message: line.replace(/^\[ERROR\]\s*/, '').trim() });
+                }
+                return false; // never consume: keep the result visible in the console
+            };
+            const timer = setTimeout(() => {
+                cleanup();
+                // No ack within the timeout: assume old firmware without upload ACK
+                resolve({ ok: true, message: '' });
+            }, timeoutMs);
+            this._lineListeners.add(listener);
+        });
     }
 
     async uploadFile(filename, content, onProgress = null) {
@@ -243,12 +295,112 @@ class SerialManager {
 
             await this.sendCommand('END');
             if (onProgress) onProgress(totalSize, totalSize);
-            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Wait for the firmware upload acknowledgement instead of a fixed delay
+            const ack = await this.waitForUploadAck();
+            if (!ack.ok) {
+                throw new Error(ack.message || 'Upload failed');
+            }
             return true;
         } catch (error) {
             console.error('Upload failed:', error);
             throw error;
         }
+    }
+
+    // Captures a screenshot via /screenshot. The firmware replies with:
+    //   === SCREENSHOT <w>x<h> RGB565[_SWAP] ===
+    //   <base64 lines, 76 chars each>
+    //   === SCREENSHOT END ===
+    // Resolves { width, height, format, swap, bytes } (bytes = raw RGB565 data).
+    // Base64 payload lines are consumed so they don't flood the console.
+    captureScreenshot(timeoutMs = 30000) {
+        if (!this.isConnected) {
+            return Promise.reject(new Error('Device not connected'));
+        }
+
+        return new Promise((resolve, reject) => {
+            let header = null;
+            const b64Lines = [];
+            const headerRe = /^===\s*SCREENSHOT\s+(\d+)x(\d+)\s+(\S+)\s*===$/;
+
+            const cleanup = () => {
+                clearTimeout(timer);
+                this._lineListeners.delete(listener);
+            };
+
+            const listener = (line) => {
+                const trimmed = line.trim();
+
+                if (!header) {
+                    const m = trimmed.match(headerRe);
+                    if (m) {
+                        header = {
+                            width: parseInt(m[1], 10),
+                            height: parseInt(m[2], 10),
+                            format: m[3],
+                            swap: m[3].endsWith('_SWAP')
+                        };
+                        return true; // consume header line
+                    }
+                    if (trimmed.startsWith('[ERROR]')) {
+                        cleanup();
+                        reject(new Error(trimmed.replace(/^\[ERROR\]\s*/, '')));
+                        return false;
+                    }
+                    if (/^Unknown command:?\s*\/?(screenshot|ss)\b/i.test(trimmed)) {
+                        cleanup();
+                        reject(new Error('This firmware does not support /screenshot'));
+                        return false;
+                    }
+                    return false; // let "Queued. Data follows..." etc. through
+                }
+
+                // Inside the data block
+                if (trimmed.startsWith('===')) {
+                    // === SCREENSHOT END === (tolerate partial-line splits)
+                    cleanup();
+                    try {
+                        const bytes = this.base64ToUint8Array(b64Lines.join(''));
+                        resolve({ ...header, bytes });
+                    } catch (e) {
+                        reject(new Error('Failed to decode screenshot data'));
+                    }
+                    return true;
+                }
+                if (trimmed.startsWith('[ERROR]')) {
+                    cleanup();
+                    reject(new Error(trimmed.replace(/^\[ERROR\]\s*/, '')));
+                    return true;
+                }
+                if (/^[A-Za-z0-9+/=]+$/.test(trimmed)) {
+                    b64Lines.push(trimmed);
+                    return true; // consume base64 payload (keep console clean)
+                }
+                return false; // unrelated output (e.g. app prints) passes through
+            };
+
+            const timer = setTimeout(() => {
+                cleanup();
+                reject(new Error('Screenshot timed out'));
+            }, timeoutMs);
+
+            this._lineListeners.add(listener);
+
+            this.sendCommand('/screenshot').catch((error) => {
+                cleanup();
+                reject(error);
+            });
+        });
+    }
+
+    base64ToUint8Array(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
     }
 
     arrayBufferToBase64(buffer) {
@@ -347,6 +499,20 @@ class SerialManager {
         await this.sendCommand(`/rm ${filename}`);
     }
 
+    async makeDirectory(path) {
+        await this.sendCommand(`/mkdir ${path}`);
+    }
+
+    // Binary-safe device-to-host file download (/download <file>);
+    // the reply is a base64 block framed by === DOWNLOAD ... === / === DOWNLOAD END ===
+    async requestDownload(filename) {
+        await this.sendCommand(`/download ${filename}`);
+    }
+
+    async factoryReset() {
+        await this.sendCommand('/factory_reset confirm');
+    }
+
     async downloadFile(url, filename) {
         if (filename) {
             await this.sendCommand(`/wget ${url} ${filename}`);
@@ -371,8 +537,9 @@ class SerialManager {
         await this.sendCommand(`/monitor ${type}`);
     }
 
-    async loadScript(filename) {
-        await this.sendCommand(`/load ${filename}`);
+    async loadScript(filename, setDefault = false) {
+        // "save" persists the choice to webscreen.json so it runs on boot
+        await this.sendCommand(setDefault ? `/load ${filename} save` : `/load ${filename}`);
     }
 
     async reboot() {
