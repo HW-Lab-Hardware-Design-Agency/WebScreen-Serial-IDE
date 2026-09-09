@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldgutter.min.css">
     
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/dialog/dialog.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
@@ -27,7 +28,7 @@
             <div class="header-content">
                 <h1>WebScreen Serial IDE</h1>
                 <div class="connection-status">
-                    <button id="themeToggle" class="btn btn-sm theme-toggle" title="Switch Theme">
+                    <button id="themeToggle" class="btn btn-sm theme-toggle" title="Switch Theme" aria-label="Switch Theme">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="5"></circle>
                             <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -47,7 +48,7 @@
                         </svg>
                         Connect Device
                     </button>
-                    <span id="connectionStatus" class="status-badge disconnected">Disconnected</span>
+                    <span id="connectionStatus" role="status" class="status-badge disconnected">Disconnected</span>
                 </div>
             </div>
         </header>
@@ -57,26 +58,27 @@
             <!-- Main Panel - Tabs -->
             <div class="main-panel">
                 <div class="panel-header">
-                    <div class="tabs">
-                        <button class="tab" data-tab="console">Serial Console</button>
-                        <button class="tab active" data-tab="editor">Code Editor</button>
-                        <button class="tab" data-tab="files">File Manager</button>
+                    <div class="tabs" role="tablist" aria-label="Workspace">
+                        <button class="tab" data-tab="console" id="console-tab-button" role="tab" aria-controls="console-tab" aria-selected="false" tabindex="-1">Serial Console</button>
+                        <button class="tab active" data-tab="editor" id="editor-tab-button" role="tab" aria-controls="editor-tab" aria-selected="true" tabindex="0">Code Editor</button>
+                        <button class="tab" data-tab="files" id="files-tab-button" role="tab" aria-controls="files-tab" aria-selected="false" tabindex="-1">File Manager</button>
                     </div>
                     <div class="editor-actions">
-                        <input type="text" id="filename" placeholder="filename.js" class="filename-input" title="Enter filename with extension (e.g., script.js, config.json, style.css)">
-                        <button id="saveBtn" class="btn btn-sm" title="Save to Device">
+                        <input type="text" id="filename" aria-label="Device file path" autocomplete="off" spellcheck="false" placeholder="filename.js" class="filename-input" title="Enter filename with extension (e.g., script.js, config.json, style.css)">
+                        <button id="downloadEditor" class="btn btn-sm" title="Download editor file to this computer" aria-label="Download editor file to this computer">Download</button>
+                        <button id="saveBtn" class="btn btn-sm" title="Save to Device" aria-label="Save to Device">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path>
                                 <polyline points="17 21 17 13 7 13 7 21"></polyline>
                                 <polyline points="7 3 7 8 15 8"></polyline>
                             </svg>
                         </button>
-                        <button id="runBtn" class="btn btn-sm btn-success" title="Run Script">
+                        <button id="runBtn" class="btn btn-sm btn-success" title="Run Script" aria-label="Run Script">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
                             </svg>
                         </button>
-                        <button id="runSaveBtn" class="btn btn-sm btn-success" title="Run &amp; Set as Default (persists to webscreen.json)">
+                        <button id="runSaveBtn" class="btn btn-sm btn-success" title="Run &amp; Set as Default (persists to webscreen.json)" aria-label="Run &amp; Set as Default (persists to webscreen.json)">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polygon points="4 3 15 10 4 17 4 3"></polygon>
                                 <path d="M19 3v10"></path>
@@ -84,37 +86,37 @@
                                 <line x1="16" y1="19" x2="22" y2="19"></line>
                             </svg>
                         </button>
-                        <button id="evalBtn" class="btn btn-sm" title="Eval selection (or current line) on device via /eval">Eval</button>
-                        <button id="screenshotBtn" class="btn btn-sm" title="Capture Device Screenshot (/screenshot)">
+                        <button id="evalBtn" class="btn btn-sm" title="Eval selection (or current line) on device via /eval" aria-label="Eval selection (or current line) on device via /eval">Eval</button>
+                        <button id="screenshotBtn" class="btn btn-sm" title="Capture Device Screenshot (/screenshot)" aria-label="Capture Device Screenshot (/screenshot)">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"></path>
                                 <circle cx="12" cy="13" r="4"></circle>
                             </svg>
                         </button>
-                        <button id="clearBtn" class="btn btn-sm" title="Clear Terminal">Clear</button>
-                        <button id="downloadLog" class="btn btn-sm" title="Download Log">Export</button>
+                        <button id="clearBtn" class="btn btn-sm" title="Clear Terminal" aria-label="Clear Terminal">Clear</button>
+                        <button id="downloadLog" class="btn btn-sm" title="Download Log" aria-label="Download Log">Export</button>
                     </div>
                 </div>
                 
                 <!-- Serial Console Tab -->
-                <div class="tab-content hidden" id="console-tab">
+                <div class="tab-content hidden" id="console-tab" role="tabpanel" aria-labelledby="console-tab-button">
                     <div class="terminal-container">
-                        <div id="terminalOutput" class="terminal-output"></div>
+                        <div id="terminalOutput" aria-label="Serial console output" tabindex="0" class="terminal-output"></div>
                         <div class="terminal-input-container">
                             <span class="prompt">WebScreen&gt;</span>
-                            <input type="text" id="terminalInput" class="terminal-input" placeholder="Type command or / for help">
+                            <input type="text" id="terminalInput" aria-label="Serial command" autocomplete="off" spellcheck="false" class="terminal-input" placeholder="Type command or / for help">
                             <button id="sendBtn" class="btn btn-sm">Send</button>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Code Editor Tab -->
-                <div class="tab-content" id="editor-tab">
+                <div class="tab-content" id="editor-tab" role="tabpanel" aria-labelledby="editor-tab-button">
                     <div id="codeEditor"></div>
                 </div>
 
                 <!-- File Manager Tab -->
-                <div class="tab-content hidden" id="files-tab">
+                <div class="tab-content hidden" id="files-tab" role="tabpanel" aria-labelledby="files-tab-button">
                     <div class="file-manager-container">
                         <!-- Upload Area -->
                         <div class="upload-area">
@@ -150,10 +152,12 @@
                                     <span id="currentPath">/</span>
                                 </div>
                                 <div class="file-actions">
-                                    <button class="btn-icon" id="refreshFiles" title="Refresh">
+                                    <button class="btn btn-sm" id="parentDirectory" title="Open parent folder" aria-label="Open parent folder">Up</button>
+                                    <button class="btn btn-sm" id="downloadFile" title="Download selected file" aria-label="Download selected file">Download</button>
+                                    <button class="btn-icon" id="refreshFiles" title="Refresh" aria-label="Refresh">
                                         <i class="fas fa-sync"></i>
                                     </button>
-                                    <button class="btn-icon" id="deleteFile" title="Delete Selected">
+                                    <button class="btn-icon" id="deleteFile" title="Delete Selected" aria-label="Delete Selected">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
@@ -278,7 +282,7 @@
             <div class="status-left">
                 <span id="cursorPosition">Ln 1, Col 1</span>
                 <span class="separator">|</span>
-                <span id="fileStatus">Ready</span>
+                <span id="fileStatus" role="status" aria-live="polite">Ready</span>
             </div>
             <div class="credits">
                 <a class="navbar-brand" href="https://webscreen.cc/" target="_blank">
@@ -308,11 +312,11 @@
     </div>
 
     <!-- Screenshot Overlay -->
-    <div class="screenshot-overlay" id="screenshotOverlay" style="display: none;">
+    <div class="screenshot-overlay" id="screenshotOverlay" role="dialog" aria-modal="true" aria-labelledby="screenshotTitle" style="display: none;">
         <div class="screenshot-modal">
             <div class="screenshot-modal-header">
                 <h3 id="screenshotTitle">Device Screenshot</h3>
-                <button class="btn-icon" id="screenshotClose" title="Close">
+                <button class="btn-icon" id="screenshotClose" title="Close" aria-label="Close">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -328,26 +332,27 @@
     </div>
 
     <!-- CodeMirror JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/css/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/xml/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/htmlmixed/htmlmixed.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/markdown/markdown.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/comment/comment.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/javascript-hint.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/scroll/simplescrollbars.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/search/searchcursor.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/search/search.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldgutter.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/brace-fold.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/javascript/javascript.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/css/css.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/xml/xml.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/markdown/markdown.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/comment/comment.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/show-hint.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/hint/javascript-hint.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/scroll/simplescrollbars.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/search/searchcursor.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/dialog/dialog.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/search/search.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldcode.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/foldgutter.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/fold/brace-fold.min.js"></script>
     
     <!-- Custom JS -->
-    <script src="serial.js"></script>
-    <script src="app.js"></script>
+    <script defer src="serial.js"></script>
+    <script defer src="app.js"></script>
 </body>
 </html>

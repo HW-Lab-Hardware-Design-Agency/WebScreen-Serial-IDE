@@ -20,22 +20,29 @@ A modern, web-based integrated development environment for WebScreen devices wit
 
 ### **Code Editor**
 - **Syntax Highlighting**: JavaScript syntax highlighting with theme-appropriate colors
-- **IntelliSense**: Auto-completion with WebScreen API suggestions
+- **Auto-completion**: CodeMirror JavaScript completion (Ctrl+Space)
 - **Line Numbers**: Easy navigation with contextual line numbering
 - **Bracket Matching**: Automatic bracket pairing and highlighting
 - **Code Folding**: Collapse code blocks for better navigation
 - **Search & Replace**: Built-in search functionality (Ctrl+F)
 - **Keyboard Shortcuts**: 
-  - `Ctrl+S`: Save file to device
+  - `Ctrl+S` / `Cmd+S`: Save file to device
   - `F5`: Run script on device
   - `Ctrl+/`: Toggle comments
   - `Ctrl+Space`: Trigger autocomplete
 
+### **Drafts and Files**
+- Editor contents and the full device path are recovered from this browser's local storage after reopening. Drafts stay on this computer; use **Download** to keep an independent copy.
+- Opening another file or leaving the page asks before discarding unsaved work. Editing during a save keeps newer changes marked as unsaved.
+- File Manager supports **Up**, keyboard navigation (Enter to open, Space to select), and binary downloads. Opening a text file preserves indentation and blank lines; CodeMirror normalizes line endings to LF.
+- Uploads use base64 for text and binary files, including empty files. Run waits for an acknowledged save before sending `/load`.
+- Plain text editing and local downloads remain available if the syntax editor CDN is unavailable. USB features require a supported desktop browser on localhost or HTTPS.
+
 ### **Device Workflow Tools**
 - **Run & Set as Default**: Second run button sends `/load <file> save`, persisting the script as the boot default in `webscreen.json`
-- **Eval Selection**: Send the current editor selection (or current line) to the running app via `/eval` (max 255 chars) for live REPL-style tweaking
+- **Eval Selection**: Send the current editor selection (or current line) to the running app via `/eval` (one line, max 255 UTF-8 bytes) for live REPL-style tweaking
 - **Errors Quick Button**: One-click `/errors` to show the last JavaScript error and line number after a failed run
-- **Screenshot Button**: Camera icon in the toolbar sends `/screenshot`, decodes the RGB565 stream, renders it to a canvas overlay, and offers a "Download PNG" export (30s timeout; disabled while disconnected or capturing)
+- **Screenshot Button**: Camera icon in the toolbar sends `/screenshot`, decodes the RGB565 stream, renders it to a canvas overlay, and offers a "Download PNG" export (30-second inactivity timeout; disabled during other device operations)
 
 ### **Theme System**
 #### Retro Theme
@@ -71,7 +78,7 @@ All WebScreen serial commands are supported with terminal tab-completion:
 
 ### Prerequisites
 - **Browser**: Chrome, Edge, or Opera (Web Serial API support required)
-- **WebScreen Device**: Connected via USB with serial commands firmware
+- **WebScreen Device**: Firmware 2.2 or newer for file reads/downloads and screenshot tools; uploads require `/upload` support. Close Arduino Serial Monitor and other Admin/IDE tabs connected to the same port.
 
 ### Usage
 
@@ -399,9 +406,8 @@ Only these Montserrat sizes are enabled in the firmware:
 Label, Image, Arc, Line, Button, Button Matrix, Canvas, Chart, Meter, Message Box, Span
 
 ### Memory Guidelines
-- Elk JS heap: 256KB (PSRAM)
-- Keep scripts under 3KB for stability
-- Limit to 5 styles and 10 labels per app
+- Runtime memory, widget limits, fonts and available APIs depend on the installed firmware. Use `/info`, `/stats` and `/errors` to inspect your device and validate apps against its Elk API documentation.
+- The IDE limits text files opened for editing to 2 MB, binary downloads to 32 MB, and screenshot buffers to 16 MB. These browser limits do not change firmware memory limits.
 
 ## Contributing
 
@@ -411,6 +417,26 @@ Label, Image, Arc, Line, Button, Button Matrix, Canvas, Chart, Meter, Message Bo
 3. Connect a WebScreen device for testing
 4. Test both themes with URL parameters
 5. Make modifications and test locally
+
+### Regression Tests
+
+Run the protocol suite with Node.js 18 or newer; no npm dependencies or device are required:
+
+```bash
+node tests/serial.test.cjs
+```
+
+For browser checks, serve `public/` on port 8770 and install Playwright outside the repository:
+
+```bash
+python3 -m http.server 8770 --bind 127.0.0.1 --directory public
+# In another terminal:
+npm install --prefix /tmp/webscreen-ide-tests playwright
+/tmp/webscreen-ide-tests/node_modules/.bin/playwright install chromium
+NODE_PATH=/tmp/webscreen-ide-tests/node_modules node tests/browser.cjs
+```
+
+Set `IDE_URL` to test another local server, or `CHROMIUM_PATH` to use an installed Chrome binary. Tests simulate fragmented USB streams, transfer failures, editor recovery, screenshots, file navigation, and both themes at several viewport widths. Verify real USB throughput, SD-card failures and physical reconnects separately on hardware before releasing.
 
 ### Adding Features
 - **New Themes**: Extend CSS custom properties system

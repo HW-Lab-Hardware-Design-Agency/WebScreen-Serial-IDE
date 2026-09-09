@@ -7,6 +7,10 @@ class WebScreenIDE {
         this.isMonitoring = false;
         this.currentTheme = 'retro';
         this.isCapturingScreenshot = false;
+        this.fileOperation = false;
+        this.revision = 0;
+        this.dirty = false;
+        this.terminalQueue = [];
 
         // File browser state
         this.currentPath = '/';
@@ -22,14 +26,16 @@ class WebScreenIDE {
         this.initEditor();
         this.setupEventListeners();
         this.setupSerialEvents();
+        this.restoreDraft();
         this.updateUI();
     }
 
     initEditor() {
         // Initialize CodeMirror
-        this.codeEditor = CodeMirror(document.getElementById('codeEditor'), {
+        const createEditor = window.CodeMirror || this.createFallbackEditor;
+        this.codeEditor = createEditor(document.getElementById('codeEditor'), {
             mode: 'javascript',
-            theme: 'dracula',
+            theme: this.currentTheme === 'focus' ? 'default' : 'dracula',
             lineNumbers: true,
             lineWrapping: true,
             autoCloseBrackets: true,
@@ -40,6 +46,7 @@ class WebScreenIDE {
                 'Ctrl-Space': 'autocomplete',
                 'Ctrl-/': 'toggleComment',
                 'Ctrl-S': () => this.saveFile(),
+                'Cmd-S': () => this.saveFile(),
                 'F5': () => this.runScript(),
                 'Ctrl-F': 'findPersistent'
             },
@@ -70,12 +77,42 @@ create_label_with_text('Hello WebScreen!');
         });
 
         // Mark as modified
-        this.codeEditor.on('change', () => {
-            this.updateFileStatus('Modified');
-        });
+        this.codeEditor.on('change', () => this.editorChanged());
+        if (!window.CodeMirror) this.appendToTerminal('Syntax editor unavailable. Plain text editing and device tools are still available.', 'log-warning');
     }
 
     setupEventListeners() {
+        document.getElementById('downloadEditor').addEventListener('click', () => this.downloadEditor());
+        document.getElementById('parentDirectory').addEventListener('click', () => {
+            const parts = this.currentPath.split('/').filter(Boolean);
+            parts.pop();
+            this.refreshFileList('/' + (parts.length ? parts.join('/') + '/' : ''));
+        });
+        document.getElementById('downloadFile').addEventListener('click', () => this.downloadSelectedFile());
+        window.addEventListener('pagehide', () => this.persistDraft());
+        window.addEventListener('beforeunload', event => {
+            this.persistDraft();
+            if (this.dirty || this.fileOperation) { event.preventDefault(); event.returnValue = ''; }
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') this.hideScreenshotOverlay();
+            if (event.key === 'Tab' && document.getElementById('screenshotOverlay').style.display === 'flex') {
+                const first = document.getElementById('screenshotClose');
+                const last = document.getElementById('screenshotDownload');
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+            }
+        });
+        const tabs = Array.from(document.querySelectorAll('.tab'));
+        tabs.forEach((tab, index) => tab.addEventListener('keydown', event => {
+            const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length :
+                event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length :
+                event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+            if (next < 0) return;
+            event.preventDefault();
+            this.switchTab(tabs[next].dataset.tab);
+            tabs[next].focus();
+        }));
         // Theme toggle button
         document.getElementById('themeToggle').addEventListener('click', () => {
             this.toggleTheme();
@@ -184,7 +221,7 @@ create_label_with_text('Hello WebScreen!');
         if (fileInput) {
             fileInput.addEventListener('change', (e) => {
                 if (e.target.files.length > 0) {
-                    this.uploadFiles(e.target.files);
+                    this.uploadFiles(Array.from(e.target.files));
                     e.target.value = '';
                 }
             });
@@ -213,7 +250,96 @@ create_label_with_text('Hello WebScreen!');
         document.getElementById('filename').addEventListener('input', (e) => {
             this.currentFile = e.target.value;
             this.updateEditorMode(e.target.value);
+            this.editorChanged();
         });
+    }
+
+    createFallbackEditor(container, options) {
+        const textarea = document.createElement('textarea');
+        textarea.className = 'fallback-editor';
+        textarea.setAttribute('aria-label', 'Source code');
+        textarea.spellcheck = false;
+        textarea.value = options.value;
+        container.appendChild(textarea);
+        const listeners = {};
+        const emit = event => listeners[event]?.(editor);
+        const editor = {
+            getValue: () => textarea.value,
+            setValue: value => { textarea.value = value; emit('change'); },
+            getSelection: () => textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
+            getCursor: () => {
+                const lines = textarea.value.slice(0, textarea.selectionStart).split('\n');
+                return {line:lines.length - 1, ch:lines[lines.length - 1].length};
+            },
+            getLine: index => textarea.value.split('\n')[index],
+            on: (event, callback) => { listeners[event] = callback; },
+            setOption: () => {}, refresh: () => {}, focus: () => textarea.focus()
+        };
+        textarea.addEventListener('input', () => emit('change'));
+        for (const event of ['keyup', 'click', 'select']) textarea.addEventListener(event, () => emit('cursorActivity'));
+        textarea.addEventListener('keydown', event => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+                event.preventDefault(); options.extraKeys['Ctrl-S']();
+            } else if (event.key === 'F5') {
+                event.preventDefault(); options.extraKeys.F5();
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                textarea.setRangeText('  ', textarea.selectionStart, textarea.selectionEnd, 'end');
+                emit('change');
+            }
+        });
+        return editor;
+    }
+
+    editorChanged() {
+        this.revision++;
+        this.dirty = true;
+        this.updateFileStatus('Modified');
+        clearTimeout(this.draftTimer);
+        this.draftTimer = setTimeout(() => this.persistDraft(), 400);
+    }
+
+    persistDraft() {
+        clearTimeout(this.draftTimer);
+        try {
+            localStorage.setItem('webscreen-ide-draft', JSON.stringify({
+                version:1, filename:document.getElementById('filename').value,
+                content:this.codeEditor.getValue(), dirty:this.dirty
+            }));
+        } catch {
+            if (!this.storageWarning) {
+                this.storageWarning = true;
+                this.appendToTerminal('Draft recovery is unavailable in this browser. Use Download to keep a local copy.', 'log-warning');
+            }
+        }
+    }
+
+    restoreDraft() {
+        try {
+            const draft = JSON.parse(localStorage.getItem('webscreen-ide-draft'));
+            if (draft?.version !== 1 || typeof draft.content !== 'string' || typeof draft.filename !== 'string') return;
+            this.codeEditor.setValue(draft.content);
+            this.currentFile = document.getElementById('filename').value = draft.filename;
+            this.updateEditorMode(draft.filename);
+            this.dirty = true; // The connected device may differ from the last session.
+            this.updateFileStatus('Draft restored — verify before saving');
+        } catch { /* Private browsing or corrupt storage must not prevent startup. */ }
+    }
+
+    downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename.split('/').pop() || 'script.js';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    downloadEditor() {
+        this.downloadBlob(new Blob([this.codeEditor.getValue()], {type:'text/plain;charset=utf-8'}),
+            document.getElementById('filename').value || 'script.js');
     }
 
     setupSerialEvents() {
@@ -236,25 +362,18 @@ create_label_with_text('Hello WebScreen!');
 
     async connect() {
         const connectBtn = document.getElementById('connectBtn');
-        const originalText = connectBtn.textContent;
-        
+        if (connectBtn.disabled) return;
         try {
             connectBtn.textContent = 'Connecting...';
             connectBtn.disabled = true;
-
             await this.serialManager.connect();
             this.appendToTerminal('Connected to WebScreen!', 'log-success');
-            
-            // Auto-refresh file list
-            setTimeout(() => {
-                this.refreshFileList();
-            }, 1000);
-            
+            await this.refreshFileList('/');
         } catch (error) {
-            this.appendToTerminal(`Connection failed: ${error.message}`, 'log-error');
+            this.appendToTerminal(`Connection failed: ${SerialManager.connectionErrorMessage(error)}`, 'log-error');
         } finally {
-            connectBtn.textContent = originalText;
             connectBtn.disabled = false;
+            this.updateConnectionStatus(this.serialManager.isConnected);
         }
     }
 
@@ -282,6 +401,9 @@ create_label_with_text('Hello WebScreen!');
             statusBadge.className = 'status-badge disconnected';
             connectBtn.textContent = 'Connect Device';
             deviceInfo.textContent = 'No device';
+            this.selectedFile = null;
+            this.fileListData = [];
+            this.renderFileList();
         }
 
         this.updateUI();
@@ -289,27 +411,18 @@ create_label_with_text('Hello WebScreen!');
 
     updateUI() {
         const connected = this.serialManager.isConnected;
-        
-        // Enable/disable buttons based on connection
-        document.getElementById('saveBtn').disabled = !connected;
-        document.getElementById('runBtn').disabled = !connected;
-        document.getElementById('runSaveBtn').disabled = !connected;
-        document.getElementById('evalBtn').disabled = !connected;
-        document.getElementById('screenshotBtn').disabled = !connected || this.isCapturingScreenshot;
-        document.getElementById('refreshFiles').disabled = !connected;
-        document.getElementById('deleteFile').disabled = !connected;
-        
-        // Update terminal input
+        const busy = this.fileOperation || this.isCapturingScreenshot;
+        for (const id of ['saveBtn', 'runBtn', 'runSaveBtn', 'evalBtn', 'screenshotBtn', 'refreshFiles', 'uploadBtn', 'sendBtn']) {
+            document.getElementById(id).disabled = !connected || busy;
+        }
+        document.getElementById('parentDirectory').disabled = !connected || busy || this.currentPath === '/';
+        document.getElementById('deleteFile').disabled = !connected || busy || !this.selectedFile;
+        document.getElementById('downloadFile').disabled = !connected || busy || this.selectedFile?.type !== 'file';
         const terminalInput = document.getElementById('terminalInput');
-        terminalInput.disabled = !connected;
-        terminalInput.placeholder = connected ? 
-            'Type command or / for help' : 
-            'Connect device to use terminal';
-
-        // Update quick command buttons
-        document.querySelectorAll('.cmd-btn').forEach(btn => {
-            btn.disabled = !connected;
-        });
+        terminalInput.disabled = !connected || busy;
+        terminalInput.placeholder = !connected ? 'Connect device to use terminal' : busy ? 'Device operation in progress…' : 'Type command or / for help';
+        document.querySelectorAll('.cmd-btn').forEach(btn => { btn.disabled = !connected || busy; });
+        document.getElementById('fileList').setAttribute('aria-busy', String(Boolean(this.fileOperation)));
     }
 
     handleTerminalInput(e) {
@@ -379,30 +492,31 @@ create_label_with_text('Hello WebScreen!');
     }
 
     appendToTerminal(text, className = 'log-response') {
-        const output = document.getElementById('terminalOutput');
-        const line = document.createElement('div');
-        line.className = className;
-        if (text.includes('\x1b')) {
-            this.renderAnsiInto(line, text);
-        } else {
-            // Fast path: plain text renders exactly as before
-            line.textContent = text;
-        }
-        output.appendChild(line);
-        
-        // Auto-scroll to bottom
-        output.scrollTop = output.scrollHeight;
-        
-        // Limit terminal history to prevent memory issues
-        while (output.children.length > 1000) {
-            output.removeChild(output.firstChild);
-        }
+        this.terminalQueue.push({text:String(text), className});
+        if (this.terminalQueue.length > 1000) this.terminalQueue.splice(0, this.terminalQueue.length - 1000);
+        if (!this.terminalTimer) this.terminalTimer = setTimeout(() => this.flushTerminal(), 32);
     }
 
-    // ANSI parsing adapted from ESPConnect (MIT, The Last Outpost Workshop)
-    // Converts ESC[...m SGR sequences (16 basic fg/bg colors, bold, reset) into
-    // classed spans. Text is inserted via textContent/createTextNode, so it is
-    // always HTML-safe. Non-SGR CSI sequences are stripped and ignored.
+    flushTerminal() {
+        clearTimeout(this.terminalTimer);
+        this.terminalTimer = null;
+        const output = document.getElementById('terminalOutput');
+        const follow = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
+        const fragment = document.createDocumentFragment();
+        for (const {text, className} of this.terminalQueue.splice(0)) {
+            const line = document.createElement('div');
+            line.className = className;
+            if (text.includes('\x1b')) this.renderAnsiInto(line, text);
+            else line.textContent = text || '\u00a0';
+            fragment.appendChild(line);
+        }
+        output.appendChild(fragment);
+        while (output.children.length > 1000) output.firstChild.remove();
+        if (follow) output.scrollTop = output.scrollHeight;
+    }
+
+    // ANSI sequences are rendered through text nodes, never HTML.
+
     renderAnsiInto(container, text) {
         const state = { fg: null, bg: null, bold: false };
         let buf = '';
@@ -471,7 +585,7 @@ create_label_with_text('Hello WebScreen!');
     // Screenshot capture (/screenshot): decodes the RGB565 block from the
     // device and renders it onto a canvas in a modal overlay.
     async captureScreenshot() {
-        if (!this.serialManager.isConnected || this.isCapturingScreenshot) return;
+        if (!this.serialManager.isConnected || this.isCapturingScreenshot || this.fileOperation) return;
 
         this.isCapturingScreenshot = true;
         this.updateUI();
@@ -513,11 +627,15 @@ create_label_with_text('Hello WebScreen!');
 
         const title = document.getElementById('screenshotTitle');
         if (title) title.textContent = `Device Screenshot (${width}x${height})`;
+        this.screenshotFocus = document.activeElement;
         document.getElementById('screenshotOverlay').style.display = 'flex';
+        document.getElementById('screenshotClose').focus();
     }
 
     hideScreenshotOverlay() {
         document.getElementById('screenshotOverlay').style.display = 'none';
+        this.screenshotFocus?.focus();
+        this.screenshotFocus = null;
     }
 
     downloadScreenshot() {
@@ -531,92 +649,65 @@ create_label_with_text('Hello WebScreen!');
     }
 
     clearTerminal() {
-        document.getElementById('terminalOutput').innerHTML = '';
+        this.terminalQueue.length = 0;
+        document.getElementById('terminalOutput').replaceChildren();
         this.appendToTerminal('Terminal cleared', 'log-info');
     }
 
     downloadLog() {
-        const output = document.getElementById('terminalOutput');
-        const logs = Array.from(output.children).map(line => line.textContent).join('\n');
-        
-        const blob = new Blob([logs], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `webscreen-log-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        this.flushTerminal();
+        const logs = Array.from(document.getElementById('terminalOutput').children).map(line => line.textContent).join('\n');
+        this.downloadBlob(new Blob([logs], {type:'text/plain'}), `webscreen-log-${Date.now()}.txt`);
     }
 
-    // Resolves to true once the upload has fully completed, false otherwise.
-    async saveFile() {
-        if (!this.serialManager.isConnected) {
-            this.appendToTerminal('Device not connected', 'log-error');
+    async withDeviceOperation(label, operation) {
+        if (!this.serialManager.isConnected || this.fileOperation || this.isCapturingScreenshot) return false;
+        this.fileOperation = true;
+        this.updateUI();
+        this.updateFileStatus(`${label}…`);
+        try { await operation(); return true; }
+        catch (error) {
+            this.updateFileStatus(`${label} failed — ${error.message}`);
+            this.appendToTerminal(`${label} failed: ${error.message}`, 'log-error');
             return false;
+        } finally {
+            this.fileOperation = false;
+            this.hideUploadProgress();
+            this.updateUI();
         }
+    }
 
-        const filename = this.currentFile || document.getElementById('filename').value || 'script.js';
-        const content = this.codeEditor.getValue();
-
-        if (!content.trim()) {
-            this.appendToTerminal('No content to save', 'log-warning');
-            return false;
-        }
-
-        // Ensure filename has path prefix
-        const fullPath = filename.startsWith('/') ? filename : '/' + filename;
-
-        try {
-            this.updateFileStatus('Saving...');
-            await this.serialManager.uploadFile(fullPath, content, (sent, total) => {
-                const percent = total > 0 ? Math.round((sent / total) * 100) : 0;
-                this.updateFileStatus(`Saving... ${percent}%`);
+    async saveFile(setDefault = null) {
+        return this.withDeviceOperation(setDefault === null ? 'Save' : 'Run', async () => {
+            const filename = document.getElementById('filename').value || 'script.js';
+            const path = this.serialManager.path(filename, true);
+            if (setDefault !== null && !/\.js$/i.test(path)) throw new Error('Only JavaScript (.js) files can run.');
+            const content = this.codeEditor.getValue();
+            const revision = this.revision;
+            // Failed or interrupted uploads leave the local draft unsaved.
+            this.dirty = true;
+            await this.serialManager.uploadFile(path, content, (sent, total) => {
+                this.updateFileStatus(`Saving… ${total ? Math.round(sent / total * 100) : 100}%`);
             });
-            this.appendToTerminal(`File saved: ${fullPath}`, 'log-success');
-            this.updateFileStatus('Saved');
-
-            // Refresh file list
-            setTimeout(() => this.refreshFileList(), 1000);
-            return true;
-        } catch (error) {
-            this.appendToTerminal(`Save failed: ${error.message}`, 'log-error');
-            this.updateFileStatus('Error');
-            return false;
-        }
+            if (revision === this.revision) {
+                this.currentFile = document.getElementById('filename').value = path;
+                this.dirty = false;
+            }
+            this.persistDraft();
+            this.updateFileStatus(this.dirty ? 'Saved earlier revision — current edits unsaved' : 'Saved to device');
+            this.appendToTerminal(`File saved: ${path}`, 'log-success');
+            if (setDefault !== null) {
+                await this.serialManager.loadScript(path, setDefault);
+                this.appendToTerminal(`Run requested: ${path}${setDefault ? ' (set as default)' : ''}`, 'log-success');
+            }
+            await this.readDirectory(this.currentPath);
+        });
     }
 
     async runScript(setDefault = false) {
-        const filename = this.currentFile || document.getElementById('filename').value || 'script.js';
-
-        // Only run .js files
-        if (!filename.endsWith('.js')) {
-            this.appendToTerminal('Can only run JavaScript (.js) files', 'log-warning');
-            return;
-        }
-
-        // Ensure filename has path prefix for loading
-        const fullPath = filename.startsWith('/') ? filename : '/' + filename;
-
-        try {
-            // Save first; saveFile() resolves only after the upload has completed
-            const saved = await this.saveFile();
-            if (!saved) return;
-
-            await this.serialManager.loadScript(fullPath, setDefault);
-            this.appendToTerminal(
-                setDefault
-                    ? `Running script (saved as default): ${fullPath}`
-                    : `Running script: ${fullPath}`,
-                'log-success'
-            );
-        } catch (error) {
-            this.appendToTerminal(`Run failed: ${error.message}`, 'log-error');
-        }
+        return this.saveFile(setDefault);
     }
 
-    // Send the current editor selection (or current line) to the running app via /eval
     async evalSelection() {
         if (!this.serialManager.isConnected) {
             this.appendToTerminal('Device not connected', 'log-error');
@@ -628,16 +719,20 @@ create_label_with_text('Hello WebScreen!');
             code = this.codeEditor.getLine(this.codeEditor.getCursor().line) || '';
         }
 
-        // /eval takes a single line; collapse newlines
-        code = code.replace(/\r?\n/g, ' ').trim();
+        if (/[\r\n]/.test(code)) {
+            this.appendToTerminal('Eval accepts one line. Use Run for multiline scripts; joining lines can change JavaScript behavior.', 'log-warning');
+            return;
+        }
+        code = code.trim();
 
         if (!code) {
             this.appendToTerminal('Nothing to eval: selection and current line are empty', 'log-warning');
             return;
         }
 
-        if (code.length > 255) {
-            this.appendToTerminal(`Eval aborted: snippet is ${code.length} chars (/eval max is 255)`, 'log-warning');
+        const bytes = new TextEncoder().encode(code).length;
+        if (bytes > 255) {
+            this.appendToTerminal(`Eval aborted: snippet is ${bytes} UTF-8 bytes (/eval max is 255)`, 'log-warning');
             return;
         }
 
@@ -647,7 +742,10 @@ create_label_with_text('Hello WebScreen!');
     switchTab(tabName) {
         // Update tab buttons
         document.querySelectorAll('.tab').forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.tab === tabName);
+            const active = tab.dataset.tab === tabName;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
         });
 
         // Update tab content
@@ -661,117 +759,72 @@ create_label_with_text('Hello WebScreen!');
         }
     }
 
-    async refreshFileList() {
-        if (!this.serialManager.isConnected) return;
+    async refreshFileList(path = this.currentPath) {
+        return this.withDeviceOperation('List files', async () => {
+            await this.readDirectory(path);
+            this.updateFileStatus(this.dirty ? 'Modified' : 'Ready');
+        });
+    }
 
-        try {
-            this.appendToTerminal('Refreshing file list...', 'log-info');
-            this.fileListLines = [];
-
-            // Temporarily capture file listing output
-            const originalHandler = this.serialManager.onDataReceived;
-            let collecting = false;
-
-            this.serialManager.onDataReceived = (line) => {
-                // Also pass to original handler for terminal display
-                if (originalHandler) originalHandler(line);
-
-                // Check for listing start
-                if (line.includes('Directory listing') || (line.includes('Type') && line.includes('Size') && line.includes('Name'))) {
-                    collecting = true;
-                    return;
-                }
-
-                // Skip separator lines
-                if (line.match(/^-+$/) || line.includes('--------------------------------')) {
-                    return;
-                }
-
-                // Check for listing end
-                if (line.includes('WebScreen>') || (line.includes('Total:') && line.includes('files'))) {
-                    collecting = false;
-                    return;
-                }
-
-                if (collecting && line.trim()) {
-                    this.fileListLines.push(line);
-                }
-            };
-
-            await this.serialManager.listFiles(this.currentPath);
-
-            // Wait a bit for response
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // Restore original handler
-            this.serialManager.onDataReceived = originalHandler;
-
-            // Parse collected lines
-            this.fileListData = this.serialManager.parseFileListing(this.fileListLines);
-            this.renderFileList();
-
-        } catch (error) {
-            this.appendToTerminal(`File refresh failed: ${error.message}`, 'log-error');
-        }
+    async readDirectory(path) {
+        const entries = await this.serialManager.listFiles(path);
+        this.currentPath = path;
+        this.fileListData = entries;
+        this.selectedFile = null;
+        this.renderFileList();
+        this.updateUI();
     }
 
     renderFileList() {
-        const fileListEl = document.getElementById('fileList');
-        const currentPathEl = document.getElementById('currentPath');
-
-        if (currentPathEl) {
-            currentPathEl.textContent = this.currentPath;
-        }
-
-        if (this.fileListData.length === 0) {
-            fileListEl.innerHTML = '<p class="placeholder">No files found</p>';
+        const list = document.getElementById('fileList');
+        document.getElementById('currentPath').textContent = this.currentPath;
+        list.replaceChildren();
+        if (!this.fileListData.length) {
+            const placeholder = document.createElement('p');
+            placeholder.className = 'placeholder';
+            placeholder.textContent = this.serialManager.isConnected ? 'This folder is empty' : 'Connect device to view files';
+            list.appendChild(placeholder);
             return;
         }
-
-        // Sort: directories first, then files
-        const sorted = [...this.fileListData].sort((a, b) => {
-            if (a.type === 'dir' && b.type !== 'dir') return -1;
-            if (a.type !== 'dir' && b.type === 'dir') return 1;
-            return a.name.localeCompare(b.name);
-        });
-
-        fileListEl.innerHTML = sorted.map(file => {
-            const icon = file.type === 'dir' ? 'fa-folder' : this.getFileIcon(file.name);
-            const iconClass = file.type === 'dir' ? 'folder' : '';
-            const size = file.type === 'file' ? this.formatBytes(file.size) : '';
-
-            return `
-                <div class="file-item" data-name="${file.name}" data-type="${file.type}">
-                    <i class="fas ${icon} file-icon ${iconClass}"></i>
-                    <span class="file-name">${file.name}</span>
-                    <span class="file-size">${size}</span>
-                </div>
-            `;
-        }).join('');
-
-        // Add click handlers
-        fileListEl.querySelectorAll('.file-item').forEach(item => {
-            item.addEventListener('click', () => {
-                // Toggle selection
-                fileListEl.querySelectorAll('.file-item').forEach(i => i.classList.remove('selected'));
+        const sorted = [...this.fileListData].sort((a, b) =>
+            (b.type === 'dir') - (a.type === 'dir') || a.name.localeCompare(b.name));
+        const fragment = document.createDocumentFragment();
+        for (const file of sorted) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.tabIndex = 0;
+            item.setAttribute('role', 'button');
+            item.setAttribute('aria-label', `${file.type === 'dir' ? 'Folder' : 'File'}: ${file.name}. Enter to open.`);
+            const icon = document.createElement('i');
+            icon.className = `fas ${file.type === 'dir' ? 'fa-folder folder' : this.getFileIcon(file.name)} file-icon`;
+            icon.setAttribute('aria-hidden', 'true');
+            const name = document.createElement('span');
+            name.className = 'file-name';
+            name.textContent = file.name;
+            const size = document.createElement('span');
+            size.className = 'file-size';
+            size.textContent = file.type === 'file' ? this.formatBytes(file.size) : '';
+            item.append(icon, name, size);
+            const select = () => {
+                if (this.fileOperation) return;
+                list.querySelectorAll('.file-item').forEach(row => row.classList.remove('selected'));
                 item.classList.add('selected');
-                this.selectedFile = {
-                    name: item.dataset.name,
-                    type: item.dataset.type
-                };
+                this.selectedFile = file;
+                this.updateUI();
+            };
+            const open = () => {
+                if (file.type === 'dir') this.refreshFileList(this.currentPath + file.name + '/');
+                else this.loadFileIntoEditor(file.name);
+            };
+            item.addEventListener('click', select);
+            item.addEventListener('dblclick', open);
+            item.addEventListener('keydown', event => {
+                if (event.key === 'Enter') { event.preventDefault(); select(); open(); }
+                if (event.key === ' ') { event.preventDefault(); select(); }
             });
-
-            item.addEventListener('dblclick', () => {
-                if (item.dataset.type === 'dir') {
-                    // Navigate into directory
-                    this.currentPath = this.currentPath + item.dataset.name + '/';
-                    this.refreshFileList();
-                } else {
-                    // Load file into editor
-                    this.loadFileIntoEditor(item.dataset.name);
-                }
-            });
-        });
+            fragment.appendChild(item);
+        }
+        list.appendChild(fragment);
     }
 
     getFileIcon(filename) {
@@ -815,115 +868,66 @@ create_label_with_text('Hello WebScreen!');
     }
 
     async loadFileIntoEditor(filename) {
-        if (!this.serialManager.isConnected) return;
-
-        try {
-            this.appendToTerminal(`Loading ${filename}...`, 'log-info');
-            let content = '';
-            let collecting = false;
-
-            const originalHandler = this.serialManager.onDataReceived;
-            this.serialManager.onDataReceived = (line) => {
-                if (originalHandler) originalHandler(line);
-
-                if (line.includes(`--- ${this.currentPath}${filename}`) || line.includes('--- /')) {
-                    collecting = true;
-                    return;
-                }
-
-                if (line.includes('--- End of file ---') || line.includes('WebScreen>')) {
-                    collecting = false;
-                    return;
-                }
-
-                if (collecting) {
-                    content += line + '\n';
-                }
-            };
-
-            await this.serialManager.catFile(this.currentPath + filename);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            this.serialManager.onDataReceived = originalHandler;
-
-            if (content.trim()) {
-                this.codeEditor.setValue(content.trim());
-                document.getElementById('filename').value = filename;
-                this.currentFile = filename;
-                this.updateEditorMode(filename);
-                this.switchTab('editor');
-                this.appendToTerminal(`Loaded ${filename}`, 'log-info');
-            }
-        } catch (error) {
-            this.appendToTerminal(`Failed to load file: ${error.message}`, 'log-error');
+        if (!/\.(js|json|txt|html?|css|xml|csv|md|svg|yaml|yml)$/i.test(filename)) {
+            this.appendToTerminal('Select Download for binary files. The editor opens text files.', 'log-warning');
+            return;
         }
+        if (this.fileOperation || !this.serialManager.isConnected) return;
+        if (this.dirty && !confirm('Replace the current unsaved draft? Use Download first to keep a copy.')) return;
+        return this.withDeviceOperation('Open file', async () => {
+            const path = this.currentPath + filename;
+            const revision = this.revision;
+            const content = await this.serialManager.readFile(path);
+            if (revision !== this.revision) throw new Error('Editor changed while loading. Your edits were kept; open the file again when ready.');
+            this.codeEditor.setValue(content);
+            this.currentFile = document.getElementById('filename').value = path;
+            this.updateEditorMode(path);
+            this.dirty = false;
+            this.persistDraft();
+            this.updateFileStatus('Loaded from device');
+            this.switchTab('editor');
+            this.codeEditor.focus();
+        });
     }
 
     async deleteSelectedFile() {
-        if (!this.serialManager.isConnected || !this.selectedFile) {
-            this.appendToTerminal('No file selected', 'log-warning');
-            return;
-        }
+        if (this.fileOperation || !this.selectedFile || !this.serialManager.isConnected) return;
+        const path = this.currentPath + this.selectedFile.name;
+        if (!confirm(`Delete ${path} from the device?`)) return;
+        return this.withDeviceOperation('Delete', async () => {
+            await this.serialManager.deleteFile(path);
+            this.appendToTerminal(`Deleted ${path}`, 'log-success');
+            await this.readDirectory(this.currentPath);
+        });
+    }
 
-        if (!confirm(`Delete ${this.selectedFile.name}?`)) return;
-
-        try {
-            const fullPath = this.currentPath + this.selectedFile.name;
-            await this.serialManager.deleteFile(fullPath);
-            this.appendToTerminal(`Deleted ${this.selectedFile.name}`, 'log-info');
-            this.selectedFile = null;
-            await this.refreshFileList();
-        } catch (error) {
-            this.appendToTerminal(`Delete failed: ${error.message}`, 'log-error');
-        }
+    async downloadSelectedFile() {
+        if (this.selectedFile?.type !== 'file') return;
+        const path = this.currentPath + this.selectedFile.name;
+        return this.withDeviceOperation('Download', async () => {
+            const bytes = await this.serialManager.requestDownload(path);
+            this.downloadBlob(new Blob([bytes], {type:'application/octet-stream'}), path);
+            this.updateFileStatus('Downloaded');
+        });
     }
 
     async uploadFiles(files) {
-        if (!this.serialManager.isConnected) {
-            this.appendToTerminal('Device not connected', 'log-error');
-            return;
-        }
-
-        for (const file of files) {
-            try {
+        const selected = Array.from(files);
+        const folder = this.currentPath;
+        return this.withDeviceOperation('Upload', async () => {
+            for (const file of selected) {
+                const path = this.serialManager.path(folder + file.name, true);
                 this.showUploadProgress(file.name, 0, file.size);
-
-                const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
-                const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-                const isTextFile = textExtensions.includes(ext);
-
-                const content = await this.readFileFromBrowser(file, !isTextFile);
-                const fullPath = this.currentPath + file.name;
-
-                this.appendToTerminal(`Uploading ${file.name}...`, 'log-info');
-
-                await this.serialManager.uploadFile(fullPath, content, (sent, total) => {
-                    this.updateUploadProgress(file.name, sent, total);
-                });
-
-                this.hideUploadProgress();
-                this.appendToTerminal(`Uploaded ${file.name}`, 'log-info');
-            } catch (error) {
-                this.hideUploadProgress();
-                this.appendToTerminal(`Upload failed: ${error.message}`, 'log-error');
+                const content = await file.arrayBuffer();
+                await this.serialManager.uploadFile(path, content, (sent, total) => this.updateUploadProgress(file.name, sent, total));
+                this.appendToTerminal(`Uploaded ${path}`, 'log-success');
             }
-        }
-
-        await this.refreshFileList();
-    }
-
-    readFileFromBrowser(file, asBinary = false) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = () => reject(new Error('Failed to read file'));
-            if (asBinary) {
-                reader.readAsArrayBuffer(file);
-            } else {
-                reader.readAsText(file);
-            }
+            await this.readDirectory(folder);
+            this.updateFileStatus('Upload complete');
         });
     }
+
+
 
     showUploadProgress(filename, sent, total) {
         const overlay = document.getElementById('uploadProgressOverlay');
@@ -976,24 +980,14 @@ create_label_with_text('Hello WebScreen!');
 
     // Theme Management
     loadTheme() {
-        // Check for URL parameter first
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlTheme = urlParams.get('mode');
-        
-        let theme;
-        if (urlTheme && (urlTheme === 'retro' || urlTheme === 'focus')) {
-            theme = urlTheme;
-            // Save URL theme to localStorage
-            localStorage.setItem('webscreen-ide-theme', theme);
-        } else {
-            // Fall back to saved theme or default
-            theme = localStorage.getItem('webscreen-ide-theme') || 'retro';
-        }
-        
-        this.setTheme(theme);
+        const urlTheme = new URLSearchParams(window.location.search).get('mode');
+        let saved;
+        try { saved = localStorage.getItem('webscreen-ide-theme'); } catch {}
+        this.setTheme(urlTheme || saved || 'retro');
     }
 
     setTheme(theme) {
+        theme = theme === 'focus' ? 'focus' : 'retro';
         this.currentTheme = theme;
         document.body.setAttribute('data-theme', theme);
         
@@ -1008,7 +1002,7 @@ create_label_with_text('Hello WebScreen!');
         }
         
         // Save to localStorage
-        localStorage.setItem('webscreen-ide-theme', theme);
+        try { localStorage.setItem('webscreen-ide-theme', theme); } catch {}
     }
 
     toggleTheme() {
