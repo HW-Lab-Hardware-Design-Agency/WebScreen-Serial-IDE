@@ -451,7 +451,7 @@ create_label_with_text('Hello WebScreen!');
         const value = input.value.toLowerCase();
         const commands = [
             '/help', '/stats', '/info', '/write', '/upload', '/config', '/ls',
-            '/cat', '/rm', '/load', '/restart_app', '/eval', '/errors', '/gc',
+            '/cat', '/rm', '/load', '/restart_app', '/button', '/eval', '/errors', '/gc',
             '/wget', '/ping', '/backup', '/monitor', '/brightness', '/time',
             '/settime', '/reboot', '/mkdir', '/download', '/screenshot',
             '/factory_reset'
