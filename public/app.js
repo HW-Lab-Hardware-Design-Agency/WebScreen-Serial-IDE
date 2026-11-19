@@ -114,6 +114,9 @@ create_label_with_text('Hello WebScreen!');
             tabs[next].focus();
         }));
         // Theme toggle button
+        document.getElementById('powerBtn').addEventListener('click', () => {
+            this.executeCommand(this.screenSleeping ? '/wake' : '/sleep');
+        });
         document.getElementById('themeToggle').addEventListener('click', () => {
             this.toggleTheme();
         });
@@ -344,6 +347,9 @@ create_label_with_text('Hello WebScreen!');
 
     setupSerialEvents() {
         this.serialManager.onDataReceived = (data) => {
+            // Follow the firmware's own acknowledgements, so a typed /sleep or /wake updates the badge too.
+            if (data.includes('[OK] Screen sleeping')) this.updateSleepState(true);
+            else if (data.includes('[OK] Screen awake')) this.updateSleepState(false);
             this.appendToTerminal(data, 'log-response');
         };
 
@@ -386,6 +392,22 @@ create_label_with_text('Hello WebScreen!');
         }
     }
 
+    // Header power button: screen standby (/sleep, /wake). The device stays
+    // connected, so the same button wakes it; the badge reads "Sleeping" meanwhile.
+    updateSleepState(sleeping) {
+        this.screenSleeping = sleeping;
+        const connected = this.serialManager.isConnected;
+        const statusBadge = document.getElementById('connectionStatus');
+        const button = document.getElementById('powerBtn');
+        button.setAttribute('aria-pressed', String(sleeping));
+        button.title = sleeping ? 'Turn the screen back on.' : 'Turn the screen off. The device stays connected.';
+        document.getElementById('powerLabel').textContent = sleeping ? 'Screen on' : 'Screen off';
+        if (connected) {
+            statusBadge.textContent = sleeping ? 'Sleeping' : 'Connected';
+            statusBadge.className = sleeping ? 'status-badge sleeping' : 'status-badge connected';
+        }
+    }
+
     updateConnectionStatus(connected) {
         const statusBadge = document.getElementById('connectionStatus');
         const connectBtn = document.getElementById('connectBtn');
@@ -406,13 +428,14 @@ create_label_with_text('Hello WebScreen!');
             this.renderFileList();
         }
 
+        this.updateSleepState(false);
         this.updateUI();
     }
 
     updateUI() {
         const connected = this.serialManager.isConnected;
         const busy = this.fileOperation || this.isCapturingScreenshot;
-        for (const id of ['saveBtn', 'runBtn', 'runSaveBtn', 'evalBtn', 'screenshotBtn', 'refreshFiles', 'uploadBtn', 'sendBtn']) {
+        for (const id of ['powerBtn', 'saveBtn', 'runBtn', 'runSaveBtn', 'evalBtn', 'screenshotBtn', 'refreshFiles', 'uploadBtn', 'sendBtn']) {
             document.getElementById(id).disabled = !connected || busy;
         }
         document.getElementById('parentDirectory').disabled = !connected || busy || this.currentPath === '/';
@@ -452,7 +475,7 @@ create_label_with_text('Hello WebScreen!');
         const commands = [
             '/help', '/stats', '/info', '/write', '/upload', '/config', '/ls',
             '/cat', '/rm', '/load', '/restart_app', '/button', '/eval', '/errors', '/gc',
-            '/wget', '/ping', '/backup', '/monitor', '/brightness', '/time',
+            '/wget', '/ping', '/backup', '/monitor', '/brightness', '/sleep', '/wake', '/time',
             '/settime', '/reboot', '/mkdir', '/download', '/screenshot',
             '/factory_reset'
         ];

@@ -226,6 +226,17 @@ body:not([data-theme="focus"]) {
     gap: 16px;
 }
 
+.power-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.status-badge.sleeping {
+    background: #555555;
+    color: #ffffff;
+    border: 1px solid #888888;
+}
+
 /* Status Badges */
 .status-badge {
     padding: 6px 16px;

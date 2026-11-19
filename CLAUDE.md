@@ -72,7 +72,7 @@ The IDE communicates with WebScreen devices using serial commands:
 ### Serial Communication
 - Web Serial API with 115200 baud rate
 - Command history with up/down arrow navigation
-- Tab-completion for the full firmware command set: `/help /stats /info /write /upload /config /ls /cat /rm /load /restart_app /button /eval /errors /gc /wget /ping /backup /monitor /brightness /time /settime /reboot /mkdir /download /screenshot /factory_reset`
+- Tab-completion for the full firmware command set: `/help /stats /info /write /upload /config /ls /cat /rm /load /restart_app /button /eval /errors /gc /wget /ping /backup /monitor /brightness /sleep /wake /time /settime /reboot /mkdir /download /screenshot /factory_reset`
 - Real-time terminal output with message classification and ANSI/SGR color rendering (16 basic colors + bold)
 - Quick command buttons for common operations, including an "Errors" button (`/errors`) to inspect the last JS error after a failed run and a "Press Button" button (`/button`) that sends a virtual press to the app's `on_button()` handler (the physical button only powers the device off)
 
