@@ -41,6 +41,8 @@ A modern, web-based integrated development environment for WebScreen devices wit
 ### **Device Workflow Tools**
 - **Run & Set as Default**: Second run button sends `/load <file> save`, persisting the script as the boot default in `webscreen.json`
 - **Eval Selection**: Send the current editor selection (or current line) to the running app via `/eval` (one line, max 255 UTF-8 bytes) for live REPL-style tweaking
+- **Screen Off / On**: Power button in the header, next to Connect Device. It sends `/sleep` or `/wake`; the screen turns off while the device stays connected, and the status badge reads "Sleeping"
+- **Press Button Quick Button**: One-click `/button` sends a button press to the running app, so `on_button()` handlers can be tested. The physical button only powers the device off
 - **Errors Quick Button**: One-click `/errors` to show the last JavaScript error and line number after a failed run
 - **Screenshot Button**: Camera icon in the toolbar sends `/screenshot`, decodes the RGB565 stream, renders it to a canvas overlay, and offers a "Download PNG" export (30-second inactivity timeout; disabled during other device operations)
 
@@ -64,7 +66,7 @@ All WebScreen serial commands are supported with terminal tab-completion:
 - **Network**: `/wget` (alias `fetch`; the old `download` alias now refers to the `/download` file transfer), `/ping`
 - **Configuration**: `/config get/set`, `/backup`
 - **Monitoring**: `/monitor cpu/mem/net`, `/errors`, `/gc`
-- **Script Management**: `/load` (with optional `save` to persist as default), `/restart_app`, `/eval`
+- **Script Management**: `/load` (with optional `save` to persist as default), `/restart_app`, `/button`, `/eval`
 
 ### **User Interface**
 - **Responsive Design**: Works on desktop and tablet devices

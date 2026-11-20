@@ -226,6 +226,39 @@ body:not([data-theme="focus"]) {
     gap: 16px;
 }
 
+.power-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0 !important;
+    border: 2px solid var(--color-primary) !important;
+    color: var(--color-primary) !important;
+}
+
+.power-toggle svg {
+    width: 20px;
+    height: 20px;
+    margin-right: 0;
+}
+
+.power-toggle[aria-pressed="true"] {
+    background: var(--color-primary) !important;
+    color: #000000 !important;
+}
+
+.power-toggle:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.status-badge.sleeping {
+    background: #555555;
+    color: #ffffff;
+    border: 1px solid #888888;
+}
+
 /* Status Badges */
 .status-badge {
     padding: 6px 16px;

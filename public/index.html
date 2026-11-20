@@ -48,6 +48,12 @@
                         </svg>
                         Connect Device
                     </button>
+                    <button id="powerBtn" class="btn btn-sm theme-toggle power-toggle" disabled aria-pressed="false" aria-label="Turn the screen off" title="Turn the screen off. The device stays connected.">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                            <line x1="12" y1="2" x2="12" y2="12"></line>
+                        </svg>
+                    </button>
                     <span id="connectionStatus" role="status" class="status-badge disconnected">Disconnected</span>
                 </div>
             </div>
@@ -190,6 +196,7 @@
                             <button class="cmd-btn" data-cmd="/ping google.com">Ping</button>
                             <button class="cmd-btn" data-cmd="/backup save">Backup</button>
                             <button class="cmd-btn" data-cmd="/errors">Errors</button>
+                            <button class="cmd-btn" data-cmd="/button" title="Send a button press to the running app (on_button). The physical button only powers the device off.">Press Button</button>
                             <button class="cmd-btn" data-cmd="/reboot">Reboot</button>
                         </div>
                     </div>
