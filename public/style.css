@@ -226,6 +226,15 @@ body:not([data-theme="focus"]) {
     gap: 16px;
 }
 
+.power-toggle svg {
+    margin-right: 0;
+}
+
+.power-toggle[aria-pressed="true"] {
+    border-color: var(--color-primary) !important;
+    color: var(--color-primary) !important;
+}
+
 .power-toggle:disabled {
     opacity: 0.5;
     cursor: not-allowed;

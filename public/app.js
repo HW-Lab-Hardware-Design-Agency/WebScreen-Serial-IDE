@@ -401,7 +401,7 @@ create_label_with_text('Hello WebScreen!');
         const button = document.getElementById('powerBtn');
         button.setAttribute('aria-pressed', String(sleeping));
         button.title = sleeping ? 'Turn the screen back on.' : 'Turn the screen off. The device stays connected.';
-        document.getElementById('powerLabel').textContent = sleeping ? 'Screen on' : 'Screen off';
+        button.setAttribute('aria-label', sleeping ? 'Turn the screen back on' : 'Turn the screen off');
         if (connected) {
             statusBadge.textContent = sleeping ? 'Sleeping' : 'Connected';
             statusBadge.className = sleeping ? 'status-badge sleeping' : 'status-badge connected';
