@@ -226,17 +226,30 @@ body:not([data-theme="focus"]) {
     gap: 16px;
 }
 
+.power-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0 !important;
+    border: 2px solid var(--color-primary) !important;
+    color: var(--color-primary) !important;
+}
+
 .power-toggle svg {
+    width: 20px;
+    height: 20px;
     margin-right: 0;
 }
 
 .power-toggle[aria-pressed="true"] {
-    border-color: var(--color-primary) !important;
-    color: var(--color-primary) !important;
+    background: var(--color-primary) !important;
+    color: #000000 !important;
 }
 
 .power-toggle:disabled {
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: not-allowed;
 }
 
